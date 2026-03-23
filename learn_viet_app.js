@@ -77,9 +77,28 @@ async function handleSignOut() {
   showAuthScreen();
 }
 
+function resetUserState() {
+  clearTimeout(_saveTimer);
+  _saveTimer = null;
+  masteredSet.clear();
+  xp = 0;
+  streak = 0;
+  consecutiveCorrect = 0;
+  consecutiveWrong = 0;
+  currentIdx = 0;
+  // Reset UI
+  const xpFill = document.getElementById('xpFill');
+  const xpLevel = document.getElementById('xpLevel');
+  const streakBadge = document.getElementById('streakBadge');
+  if (xpFill) xpFill.style.width = '0%';
+  if (xpLevel) xpLevel.textContent = '1 · Beginner';
+  if (streakBadge) streakBadge.textContent = '🔥 0 streak';
+}
+
 function showAuthScreen() {
   currentUser = null;
   isAdmin = false;
+  resetUserState();
   const adminTab = document.getElementById('adminNavTab');
   if (adminTab) adminTab.style.display = 'none';
   document.getElementById('appNav').style.display = 'none';
@@ -95,6 +114,8 @@ sb.auth.onAuthStateChange(async (event, session) => {
   if (event === 'SIGNED_OUT') { showAuthScreen(); return; }
   if (session?.user) {
     currentUser = session.user;
+    // Reset all user state before loading new user's progress
+    resetUserState();
     document.getElementById('authScreen').style.display = 'none';
     document.getElementById('appNav').style.display = 'block';
     document.getElementById('navUserEmail').textContent = session.user.email;
@@ -130,14 +151,18 @@ async function loadCardsFromDB() {
 /* ── PROGRESS SYNC ── */
 async function loadProgressFromDB() {
   if (!currentUser) return;
-  const { data } = await sb.from('progress').select('*').eq('user_id', currentUser.id).single();
-  if (!data) return;
-  if (data.xp) { xp = data.xp; addXP(0); }
-  if (data.streak) { streak = data.streak; document.getElementById('streakBadge').textContent = '🔥 ' + streak + ' streak'; }
-  if (data.mastered) {
-    data.mastered.split(',').filter(Boolean).forEach(v => masteredSet.add(v));
-    updateStats();
-  }
+  const { data, error } = await sb.from('progress').select('*').eq('user_id', currentUser.id).single();
+  if (error || !data) return; // no row yet = fresh user, keep at 0
+  if (data.xp != null)     { xp = data.xp; addXP(0); }
+  if (data.streak != null) { streak = data.streak; document.getElementById('streakBadge').textContent = '🔥 ' + streak + ' streak'; }
+  if (data.mastered)       { data.mastered.split(',').filter(Boolean).forEach(v => masteredSet.add(v)); updateStats(); }
+}
+
+let _saveTimer = null;
+function scheduleSave() {
+  if (!currentUser) return;
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(saveProgressToDB, 2000); // debounce: save 2s after last action
 }
 
 async function saveProgressToDB() {
@@ -148,7 +173,8 @@ async function saveProgressToDB() {
     streak: streak,
     mastered: [...masteredSet].join(',')
   };
-  await sb.from('progress').upsert(payload, { onConflict: 'user_id' });
+  const { error } = await sb.from('progress').upsert(payload, { onConflict: 'user_id' });
+  if (error) console.warn('Progress save failed:', error.message);
 }
 
 /* ── VIEW SWITCHER ── */
@@ -1700,19 +1726,32 @@ function toggleAnswer(i) {
   btn.textContent = show ? 'Hide answer' : 'Show answer';
 }
 
-// ── INIT ──
-buildScenarioPicker();
-addXP(0);
+// ── Bottom of file — intentionally empty, init runs via onAuthStateChange ──
 
 
-/* ── INIT ── */
-buildScenarioPicker();
-addXP(0);
-
-
-// Override markCard to save progress after each verdict
+// Override markCard and addXP to schedule a save after state changes
 const _markCardOrig = markCard;
 markCard = function(mastered) {
   _markCardOrig(mastered);
-  saveProgressToDB();
+  scheduleSave();
 };
+
+const _addXPOrig = addXP;
+addXP = function(n) {
+  _addXPOrig(n);
+  if (n > 0) scheduleSave(); // only schedule save when actually earning XP
+};
+
+const _updateStreakOrig = updateStreak;
+updateStreak = function(correct) {
+  _updateStreakOrig(correct);
+  scheduleSave();
+};
+
+// Auto-save every 60 seconds as a safety net
+setInterval(() => { if (currentUser) saveProgressToDB(); }, 60000);
+
+// Save on page close / tab switch
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && currentUser) saveProgressToDB();
+});
