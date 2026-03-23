@@ -294,18 +294,12 @@
 <div class="app-view" id="view-admin">
   <div class="app-wrapper">
     <div style="font-family:'Playfair Display',serif;font-size:28px;font-weight:400;margin-bottom:6px;">Admin <em style="font-style:italic;color:var(--terracotta);">Panel</em></div>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:24px;">Add and manage flashcard content. Requires your Supabase secret key (sb_secret_...).</p>
-
-    <div class="admin-key-row">
-      <input class="admin-key-input" id="adminKeyInput" type="password" placeholder="Paste secret key (sb_secret_...) to unlock..." />
-      <button class="btn btn-primary" onclick="unlockAdmin()" style="padding:11px 20px;border-radius:10px;">Unlock</button>
-      <button class="btn btn-secondary" onclick="lockAdmin()" style="padding:11px 20px;border-radius:10px;">Lock</button>
-    </div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:24px;">Add and manage flashcard content. Access is granted based on your account.</p>
 
     <div id="adminLocked" class="admin-locked">
       <div class="admin-locked-icon">🔒</div>
-      <div style="font-size:15px;font-weight:500;color:var(--ink);margin-bottom:6px;">Admin locked</div>
-      <div style="font-size:13px;">Enter your secret key above to manage cards</div>
+      <div style="font-size:15px;font-weight:500;color:var(--ink);margin-bottom:6px;">Checking admin access...</div>
+      <div id="adminStatus" style="font-size:13px;color:var(--muted);">Please wait</div>
     </div>
 
     <div id="adminUnlocked" style="display:none;">

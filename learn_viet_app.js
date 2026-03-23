@@ -13,7 +13,6 @@ if (window.location.hash && window.location.hash.includes('access_token')) {
   history.replaceState(null, '', window.location.pathname);
 }
 
-let sbAdmin = null; // secret key client, set on unlock
 let currentUser = null;
 
 /* ── AUTH ── */
@@ -80,7 +79,6 @@ async function handleSignOut() {
 
 function showAuthScreen() {
   currentUser = null;
-  sbAdmin = null;
   document.getElementById('appNav').style.display = 'none';
   document.getElementById('authScreen').style.display = 'flex';
   document.querySelectorAll('.app-view').forEach(v => v.classList.remove('active'));
@@ -151,7 +149,7 @@ function switchView(view) {
     if (['flashcards','practice','admin'][i] === view) t.classList.add('active');
   });
   window.scrollTo({top:0,behavior:'smooth'});
-  if (view === 'admin' && sbAdmin) loadAdminCards();
+  if (view === 'admin') initAdminView();
   if (view === 'flashcards' && deck && deck.length > 0) showCard();
   if (view === 'practice' && typeof loadSentence === 'function') loadSentence();
 }
@@ -166,39 +164,44 @@ function showToast(msg, dur) {
 }
 
 /* ── ADMIN PANEL ── */
+// Admin now uses the user's own session (no secret key needed)
+// Access is controlled by the admins table in Supabase RLS
+
 let adminCards = [];
-function unlockAdmin() {
-  const key = document.getElementById('adminKeyInput').value.trim();
-  if (!key || (!key.startsWith('eyJ') && !key.startsWith('sb_secret_')) || key.length < 20) {
-    showToast('Invalid secret key format');
-    document.getElementById('adminKeyInput').value = '';
-    return;
-  }
-  sbAdmin = createClient('https://ufodnrwbbxfbbjzsowfc.supabase.co', key, {
-    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
-  });
-  document.getElementById('adminLocked').style.display = 'none';
-  document.getElementById('adminUnlocked').style.display = 'block';
-  document.getElementById('adminKeyInput').value = '';
-  loadAdminCards();
-  showToast('Admin unlocked ✓');
+let isAdmin = false;
+
+async function checkAdminAccess() {
+  if (!currentUser) return false;
+  const { data, error } = await sb.from('admins').select('user_id').eq('user_id', currentUser.id).single();
+  return !error && !!data;
 }
 
-function lockAdmin() {
-  sbAdmin = null;
-  document.getElementById('adminLocked').style.display = 'block';
-  document.getElementById('adminUnlocked').style.display = 'none';
-  document.getElementById('adminKeyInput').value = '';
-  showToast('Admin locked');
+async function initAdminView() {
+  const adminLocked = document.getElementById('adminLocked');
+  const adminUnlocked = document.getElementById('adminUnlocked');
+  const adminStatus = document.getElementById('adminStatus');
+
+  adminLocked.style.display = 'block';
+  adminUnlocked.style.display = 'none';
+  adminStatus.textContent = 'Checking access...';
+
+  isAdmin = await checkAdminAccess();
+
+  if (isAdmin) {
+    adminLocked.style.display = 'none';
+    adminUnlocked.style.display = 'block';
+    await loadAdminCards();
+  } else {
+    adminStatus.textContent = 'You do not have admin access.';
+  }
 }
 
 async function loadAdminCards() {
-  if (!sbAdmin) return;
   const countEl = document.getElementById('adminCardCount');
   countEl.textContent = '(loading...)';
-  const { data, error } = await sbAdmin.from('cards').select('*').order('cat').order('viet');
+  const { data, error } = await sb.from('cards').select('*').order('cat').order('viet');
   if (error) {
-    showToast('Error: ' + error.message, 4000);
+    showToast('Error loading cards: ' + error.message, 4000);
     countEl.textContent = '(error)';
     return;
   }
@@ -286,7 +289,7 @@ function cancelEdit() {
 }
 
 async function saveCard() {
-  if (!sbAdmin) { showToast('Admin not unlocked'); return; }
+  if (!isAdmin) { showToast('No admin access'); return; }
   const id = document.getElementById('editCardId').value;
   const payload = {
     viet: document.getElementById('aViet').value.trim(),
@@ -295,16 +298,15 @@ async function saveCard() {
     cat: document.getElementById('aCat').value.trim(),
     context: document.getElementById('aContext').value.trim(),
   };
-  // Validate lengths
   if (!payload.viet || !payload.eng || !payload.cat) { showToast('Vietnamese, English and Category are required'); return; }
   if (payload.viet.length > 200 || payload.eng.length > 200 || payload.cat.length > 100 || payload.context.length > 500) {
     showToast('Input too long — please shorten and try again'); return;
   }
   let error;
   if (id) {
-    ({ error } = await sbAdmin.from('cards').update(payload).eq('id', id));
+    ({ error } = await sb.from('cards').update(payload).eq('id', id));
   } else {
-    ({ error } = await sbAdmin.from('cards').insert(payload));
+    ({ error } = await sb.from('cards').insert(payload));
   }
   if (error) { showToast('Error: ' + error.message); return; }
   showToast(id ? 'Card updated ✓' : 'Card added ✓');
@@ -316,9 +318,9 @@ async function saveCard() {
 }
 
 async function deleteCard(id) {
-  if (!sbAdmin) return;
+  if (!isAdmin) return;
   if (!confirm('Delete this card? This cannot be undone.')) return;
-  const { error } = await sbAdmin.from('cards').delete().eq('id', id);
+  const { error } = await sb.from('cards').delete().eq('id', id);
   if (error) { showToast('Error: ' + error.message); return; }
   showToast('Card deleted');
   await loadAdminCards();
