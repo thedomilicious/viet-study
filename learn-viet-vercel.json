@@ -1,6 +1,0 @@
-{
-  "rewrites": [
-    { "source": "/", "destination": "/learn-viet.html" },
-    { "source": "/learn-viet", "destination": "/learn-viet.html" }
-  ]
-}
