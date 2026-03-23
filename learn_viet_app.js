@@ -101,6 +101,9 @@ function showAuthScreen() {
   resetUserState();
   const adminTab = document.getElementById('adminNavTab');
   if (adminTab) adminTab.style.display = 'none';
+  const adminMobileTab = document.getElementById('adminMobileTab');
+  if (adminMobileTab) adminMobileTab.style.display = 'none';
+  closeMobileMenu();
   document.getElementById('appNav').style.display = 'none';
   document.getElementById('authScreen').style.display = 'flex';
   document.querySelectorAll('.app-view').forEach(v => v.classList.remove('active'));
@@ -123,6 +126,8 @@ sb.auth.onAuthStateChange(async (event, session) => {
     document.getElementById('navUserEmail').title = email;
     const avatarEl = document.getElementById('navUserAvatar');
     if (avatarEl) avatarEl.textContent = email.charAt(0).toUpperCase();
+    const mobileUserEl = document.getElementById('mobileUserEmail');
+    if (mobileUserEl) mobileUserEl.textContent = email;
     await loadCardsFromDB();
     await loadProgressFromDB();
     await showAdminTabIfEligible();
@@ -133,7 +138,9 @@ sb.auth.onAuthStateChange(async (event, session) => {
 async function showAdminTabIfEligible() {
   const { data } = await sb.from('admins').select('user_id').eq('user_id', currentUser.id).single();
   const adminTab = document.getElementById('adminNavTab');
+  const adminMobileTab = document.getElementById('adminMobileTab');
   if (adminTab) adminTab.style.display = data ? '' : 'none';
+  if (adminMobileTab) adminMobileTab.style.display = data ? '' : 'none';
   isAdmin = !!data;
 }
 
@@ -181,6 +188,26 @@ async function saveProgressToDB() {
   if (error) showToast('⚠️ Progress not saved — check connection', 3000);
 }
 
+
+/* ── MOBILE MENU ── */
+function toggleMobileMenu() {
+  const menu = document.getElementById('mobileMenu');
+  const btn = document.getElementById('hamburger');
+  const isOpen = menu.classList.toggle('open');
+  btn.classList.toggle('open', isOpen);
+}
+
+function closeMobileMenu() {
+  document.getElementById('mobileMenu').classList.remove('open');
+  document.getElementById('hamburger').classList.remove('open');
+}
+
+// Close menu when tapping outside
+document.addEventListener('click', e => {
+  const nav = document.getElementById('appNav');
+  if (nav && !nav.contains(e.target)) closeMobileMenu();
+});
+
 /* ── VIEW SWITCHER ── */
 function switchView(view) {
   document.querySelectorAll('.app-view').forEach(v => v.classList.remove('active'));
@@ -189,6 +216,13 @@ function switchView(view) {
   document.querySelectorAll('.app-nav-tab').forEach((t, i) => {
     if (['flashcards','practice','admin'][i] === view) t.classList.add('active');
   });
+  // Sync mobile menu active state
+  document.querySelectorAll('.mobile-menu-item').forEach(t => t.classList.remove('active'));
+  const mobileViews = ['flashcards','practice','admin'];
+  document.querySelectorAll('.mobile-menu-item').forEach((t, i) => {
+    if (mobileViews[i] === view) t.classList.add('active');
+  });
+  closeMobileMenu();
   window.scrollTo({top:0,behavior:'smooth'});
   if (view === 'admin') initAdminView();
   if (view === 'flashcards' && deck && deck.length > 0) showCard();

@@ -33,16 +33,42 @@
 <nav class="app-nav" id="appNav" style="display:none;">
   <div class="app-nav-inner">
     <div class="app-nav-logo">🇻🇳 Tiếng Việt</div>
-    <div class="app-nav-tabs">
+
+    <!-- Desktop tabs -->
+    <div class="app-nav-tabs" id="desktopTabs">
       <button class="app-nav-tab active" onclick="switchView('flashcards')">📚 Flashcards</button>
       <button class="app-nav-tab" onclick="switchView('practice')">🎯 Practice</button>
       <button class="app-nav-tab" id="adminNavTab" onclick="switchView('admin')" style="display:none;">⚙️ Admin</button>
     </div>
+
     <div class="app-nav-user">
       <span id="navUserEmail" title=""></span>
       <div id="navUserAvatar" style="width:28px;height:28px;border-radius:50%;background:rgba(196,98,58,0.12);color:var(--terracotta);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;"></div>
-      <button onclick="handleSignOut()">Sign out</button>
+      <button onclick="handleSignOut()" class="signout-btn">Sign out</button>
     </div>
+
+    <!-- Hamburger button (mobile only) -->
+    <button class="hamburger" id="hamburger" onclick="toggleMobileMenu()" aria-label="Menu">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+
+  <!-- Mobile dropdown -->
+  <div class="mobile-menu" id="mobileMenu">
+    <button class="mobile-menu-item active" onclick="switchView('flashcards');toggleMobileMenu()">
+      <span class="mobile-menu-icon">📚</span> Flashcards
+    </button>
+    <button class="mobile-menu-item" onclick="switchView('practice');toggleMobileMenu()">
+      <span class="mobile-menu-icon">🎯</span> Practice
+    </button>
+    <button class="mobile-menu-item" id="adminMobileTab" onclick="switchView('admin');toggleMobileMenu()" style="display:none;">
+      <span class="mobile-menu-icon">⚙️</span> Admin
+    </button>
+    <div class="mobile-menu-divider"></div>
+    <div class="mobile-menu-user" id="mobileUserEmail"></div>
+    <button class="mobile-menu-item mobile-menu-signout" onclick="handleSignOut()">
+      <span class="mobile-menu-icon">→</span> Sign out
+    </button>
   </div>
 </nav>
 
