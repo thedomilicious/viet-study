@@ -79,6 +79,9 @@ async function handleSignOut() {
 
 function showAuthScreen() {
   currentUser = null;
+  isAdmin = false;
+  const adminTab = document.getElementById('adminNavTab');
+  if (adminTab) adminTab.style.display = 'none';
   document.getElementById('appNav').style.display = 'none';
   document.getElementById('authScreen').style.display = 'flex';
   document.querySelectorAll('.app-view').forEach(v => v.classList.remove('active'));
@@ -97,9 +100,17 @@ sb.auth.onAuthStateChange(async (event, session) => {
     document.getElementById('navUserEmail').textContent = session.user.email;
     await loadCardsFromDB();
     await loadProgressFromDB();
+    await showAdminTabIfEligible();
     initApp();
   }
 });
+
+async function showAdminTabIfEligible() {
+  const { data } = await sb.from('admins').select('user_id').eq('user_id', currentUser.id).single();
+  const adminTab = document.getElementById('adminNavTab');
+  if (adminTab) adminTab.style.display = data ? '' : 'none';
+  isAdmin = !!data;
+}
 
 /* ── LOAD CARDS FROM SUPABASE ── */
 async function loadCardsFromDB() {
@@ -179,20 +190,13 @@ async function checkAdminAccess() {
 async function initAdminView() {
   const adminLocked = document.getElementById('adminLocked');
   const adminUnlocked = document.getElementById('adminUnlocked');
-  const adminStatus = document.getElementById('adminStatus');
-
-  adminLocked.style.display = 'block';
-  adminUnlocked.style.display = 'none';
-  adminStatus.textContent = 'Checking access...';
-
-  isAdmin = await checkAdminAccess();
-
   if (isAdmin) {
     adminLocked.style.display = 'none';
     adminUnlocked.style.display = 'block';
     await loadAdminCards();
   } else {
-    adminStatus.textContent = 'You do not have admin access.';
+    adminLocked.style.display = 'block';
+    adminUnlocked.style.display = 'none';
   }
 }
 
