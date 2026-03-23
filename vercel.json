@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/", "destination": "/learn_viet.html" },
+    { "source": "/learn_viet", "destination": "/learn_viet.html" }
+  ]
+}
