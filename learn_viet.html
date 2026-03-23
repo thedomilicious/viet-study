@@ -1089,8 +1089,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(circle
 <!-- FLASHCARDS VIEW -->
 <div class="app-view active" id="view-flashcards">
   <div class="app-wrapper">
-    <div class="app-view active" id="view-flashcards">
-  <div class="app-wrapper">
+    
     <header class="header">
     <div class="header-eyebrow">Bắt đầu học · Begin learning</div>
     <h1>Học Tiếng <em>Việt</em></h1>
@@ -1200,8 +1199,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(circle
 <!-- PRACTICE VIEW -->
 <div class="app-view" id="view-practice">
   <div class="app-wrapper">
-    <div class="app-view" id="view-practice">
-  <div class="app-wrapper">
+    
     <header class="header">
     <div class="eyebrow">Luyện tập mỗi ngày · Practice every day</div>
     <h1>Vietnamese <em>Practice</em></h1>
@@ -1497,6 +1495,8 @@ function switchView(view) {
   });
   window.scrollTo({top:0,behavior:'smooth'});
   if (view === 'admin' && sbAdmin) renderAdminList();
+  if (view === 'flashcards' && deck && deck.length > 0) showCard();
+  if (view === 'practice' && typeof loadSentence === 'function') loadSentence();
 }
 
 /* ── SHARED TOAST ── */
