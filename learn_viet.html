@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Học Tiếng Việt</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; connect-src https://ufodnrwbbxfbbjzsowfc.supabase.co https://api.anthropic.com; img-src 'self' data:;">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 
@@ -1385,7 +1386,19 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(circle
 <script>
 /* ── SUPABASE ── */
 const { createClient } = supabase;
-const sb = createClient('https://ufodnrwbbxfbbjzsowfc.supabase.co', 'sb_publishable_BS7r1bZfOIkwq_oS_twp8Q_nLYIOXn7');
+const sb = createClient('https://ufodnrwbbxfbbjzsowfc.supabase.co', 'sb_publishable_BS7r1bZfOIkwq_oS_twp8Q_nLYIOXn7', {
+  auth: {
+    persistSession: false,      // never store session in localStorage
+    autoRefreshToken: false,    // don't silently refresh tokens
+    detectSessionInUrl: false,  // don't read tokens from URL hash
+  }
+});
+
+/* ── SECURITY: strip auth tokens from URL immediately ── */
+if (window.location.hash && window.location.hash.includes('access_token')) {
+  history.replaceState(null, '', window.location.pathname);
+}
+
 let sbAdmin = null; // secret key client, set on unlock
 let currentUser = null;
 
@@ -1398,12 +1411,23 @@ function setAuthMode(m) {
   document.getElementById('authErr').textContent = '';
 }
 
+let authFailCount = 0;
+let authLockUntil = 0;
+
 async function handleAuth() {
+  const now = Date.now();
+  if (now < authLockUntil) {
+    const secs = Math.ceil((authLockUntil - now) / 1000);
+    document.getElementById('authErr').textContent = `Too many attempts. Wait ${secs}s.`;
+    return;
+  }
   const email = document.getElementById('authEmail').value.trim();
   const password = document.getElementById('authPassword').value;
   const errEl = document.getElementById('authErr');
   errEl.textContent = '';
   if (!email || !password) { errEl.textContent = 'Please fill in both fields'; return; }
+  if (!email.includes('@') || email.length > 254) { errEl.textContent = 'Please enter a valid email'; return; }
+  if (password.length < 6) { errEl.textContent = 'Password must be at least 6 characters'; return; }
   const btn = document.querySelector('.auth-btn');
   btn.textContent = '...';
   btn.disabled = true;
@@ -1414,9 +1438,20 @@ async function handleAuth() {
     } else {
       res = await sb.auth.signUp({ email, password });
     }
-    if (res.error) { errEl.textContent = res.error.message; }
-    else if (authMode === 'signup' && !res.data.session) {
-      errEl.textContent = 'Check your email to confirm your account, then sign in.';
+    if (res.error) {
+      authFailCount++;
+      if (authFailCount >= 5) {
+        authLockUntil = Date.now() + 30000; // 30 second lockout
+        authFailCount = 0;
+        errEl.textContent = 'Too many failed attempts. Please wait 30 seconds.';
+      } else {
+        errEl.textContent = res.error.message;
+      }
+    } else {
+      authFailCount = 0;
+      if (authMode === 'signup' && !res.data.session) {
+        errEl.textContent = 'Check your email to confirm your account, then sign in.';
+      }
     }
   } catch(e) { errEl.textContent = 'Something went wrong, please try again'; }
   finally { btn.textContent = authMode === 'login' ? 'Sign in' : 'Create account'; btn.disabled = false; }
@@ -1520,7 +1555,11 @@ function showToast(msg, dur) {
 let adminCards = [];
 function unlockAdmin() {
   const key = document.getElementById('adminKeyInput').value.trim();
-  if (!key || (!key.startsWith('eyJ') && !key.startsWith('sb_secret_'))) { showToast('Invalid key format'); return; }
+  if (!key || (!key.startsWith('eyJ') && !key.startsWith('sb_secret_')) || key.length < 20) {
+    showToast('Invalid secret key format');
+    document.getElementById('adminKeyInput').value = '';
+    return;
+  }
   sbAdmin = createClient('https://ufodnrwbbxfbbjzsowfc.supabase.co', key);
   document.getElementById('adminLocked').style.display = 'none';
   document.getElementById('adminUnlocked').style.display = 'block';
@@ -1546,6 +1585,12 @@ async function loadAdminCards() {
   renderAdminList();
 }
 
+function sanitize(str) {
+  const d = document.createElement('div');
+  d.textContent = str || '';
+  return d.innerHTML;
+}
+
 function renderAdminList() {
   const q = (document.getElementById('adminSearch').value || '').toLowerCase();
   const filtered = adminCards.filter(c =>
@@ -1553,19 +1598,45 @@ function renderAdminList() {
   );
   const list = document.getElementById('adminCardsList');
   list.innerHTML = '';
+
+  if (filtered.length === 0) {
+    const empty = document.createElement('div');
+    empty.style.cssText = 'text-align:center;padding:32px;color:var(--muted);font-size:14px;';
+    empty.textContent = 'No cards found';
+    list.appendChild(empty);
+    return;
+  }
+
   filtered.forEach(card => {
     const row = document.createElement('div');
     row.className = 'admin-card-row';
-    row.innerHTML = `
-      <div class="admin-card-viet">${card.viet}</div>
-      <div class="admin-card-eng">${card.eng}</div>
-      <div class="admin-card-cat">${card.cat}</div>
-      <button class="admin-del-btn" onclick='editCard(${JSON.stringify(card).replace(/'/g,"\\'")})'  style="color:var(--gold);border-color:rgba(201,155,69,.3);">Edit</button>
-      <button class="admin-del-btn" onclick="deleteCard('${card.id}')">Delete</button>
-    `;
+
+    const viet = document.createElement('div');
+    viet.className = 'admin-card-viet';
+    viet.textContent = card.viet;
+
+    const eng = document.createElement('div');
+    eng.className = 'admin-card-eng';
+    eng.textContent = card.eng;
+
+    const cat = document.createElement('div');
+    cat.className = 'admin-card-cat';
+    cat.textContent = card.cat;
+
+    const editBtn = document.createElement('button');
+    editBtn.className = 'admin-del-btn';
+    editBtn.style.cssText = 'color:var(--gold);border-color:rgba(201,155,69,.3);';
+    editBtn.textContent = 'Edit';
+    editBtn.addEventListener('click', () => editCard(card));
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'admin-del-btn';
+    delBtn.textContent = 'Delete';
+    delBtn.addEventListener('click', () => deleteCard(card.id));
+
+    row.append(viet, eng, cat, editBtn, delBtn);
     list.appendChild(row);
   });
-  if (filtered.length === 0) list.innerHTML = '<div style="text-align:center;padding:32px;color:var(--muted);font-size:14px;">No cards found</div>';
 }
 
 function editCard(card) {
@@ -1601,7 +1672,11 @@ async function saveCard() {
     cat: document.getElementById('aCat').value.trim(),
     context: document.getElementById('aContext').value.trim(),
   };
+  // Validate lengths
   if (!payload.viet || !payload.eng || !payload.cat) { showToast('Vietnamese, English and Category are required'); return; }
+  if (payload.viet.length > 200 || payload.eng.length > 200 || payload.cat.length > 100 || payload.context.length > 500) {
+    showToast('Input too long — please shorten and try again'); return;
+  }
   let error;
   if (id) {
     ({ error } = await sbAdmin.from('cards').update(payload).eq('id', id));
