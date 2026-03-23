@@ -155,7 +155,7 @@ async function loadProgressFromDB() {
   if (error || !data) return; // no row yet = fresh user, keep at 0
   if (data.xp != null)     { xp = data.xp; addXP(0); }
   if (data.streak != null) { streak = data.streak; document.getElementById('streakBadge').textContent = '🔥 ' + streak + ' streak'; }
-  if (data.mastered)       { data.mastered.split(',').filter(Boolean).forEach(v => masteredSet.add(v)); updateStats(); }
+  if (data.mastered)       { data.mastered.split(',').filter(Boolean).forEach(id => masteredSet.add(id)); updateStats(); }
 }
 
 let _saveTimer = null;
@@ -174,7 +174,7 @@ async function saveProgressToDB() {
     mastered: [...masteredSet].join(',')
   };
   const { error } = await sb.from('progress').upsert(payload, { onConflict: 'user_id' });
-  if (error) console.warn('Progress save failed:', error.message);
+  if (error) showToast('⚠️ Progress not saved — check connection', 3000);
 }
 
 /* ── VIEW SWITCHER ── */
@@ -823,7 +823,7 @@ function prevCard() {
 
 function markCard(mastered) {
   const card = deck[currentIdx];
-  const key = card.viet;
+  const key = card.id || card.viet; // prefer UUID, fall back to viet text
   if (mastered) {
     masteredSet.add(key);
     showToast('✓ Marked as mastered!');
@@ -880,7 +880,7 @@ function renderGrid() {
   document.getElementById('gridBadge').textContent = `${cards.length} cards`;
   grid.innerHTML = '';
   cards.forEach((card) => {
-    const isMastered = masteredSet.has(card.viet);
+    const isMastered = masteredSet.has(card.id) || masteredSet.has(card.viet);
     const el = document.createElement('div');
     el.className = 'mini-card' + (isMastered ? ' mastered-card' : '');
     const q = searchQuery.trim().toLowerCase();
