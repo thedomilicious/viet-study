@@ -1425,16 +1425,24 @@ async function handleAuth() {
 document.getElementById('authPassword').addEventListener('keydown', e => { if(e.key==='Enter') handleAuth(); });
 
 async function handleSignOut() {
-  await sb.auth.signOut();
+  try { await sb.auth.signOut(); } catch(e) {}
+  showAuthScreen();
+}
+
+function showAuthScreen() {
   currentUser = null;
+  sbAdmin = null;
   document.getElementById('appNav').style.display = 'none';
   document.getElementById('authScreen').style.display = 'flex';
   document.querySelectorAll('.app-view').forEach(v => v.classList.remove('active'));
   document.getElementById('view-flashcards').classList.add('active');
+  document.getElementById('adminLocked').style.display = 'block';
+  document.getElementById('adminUnlocked').style.display = 'none';
 }
 
 /* ── SESSION LISTENER ── */
 sb.auth.onAuthStateChange(async (event, session) => {
+  if (event === 'SIGNED_OUT') { showAuthScreen(); return; }
   if (session?.user) {
     currentUser = session.user;
     document.getElementById('authScreen').style.display = 'none';
