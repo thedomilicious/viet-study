@@ -39,7 +39,8 @@
       <button class="app-nav-tab" id="adminNavTab" onclick="switchView('admin')" style="display:none;">⚙️ Admin</button>
     </div>
     <div class="app-nav-user">
-      <span id="navUserEmail"></span>
+      <span id="navUserEmail" title=""></span>
+      <div id="navUserAvatar" style="width:28px;height:28px;border-radius:50%;background:rgba(196,98,58,0.12);color:var(--terracotta);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;"></div>
       <button onclick="handleSignOut()">Sign out</button>
     </div>
   </div>

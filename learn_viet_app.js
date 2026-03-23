@@ -118,7 +118,11 @@ sb.auth.onAuthStateChange(async (event, session) => {
     resetUserState();
     document.getElementById('authScreen').style.display = 'none';
     document.getElementById('appNav').style.display = 'block';
-    document.getElementById('navUserEmail').textContent = session.user.email;
+    const email = session.user.email || '';
+    document.getElementById('navUserEmail').textContent = email;
+    document.getElementById('navUserEmail').title = email;
+    const avatarEl = document.getElementById('navUserAvatar');
+    if (avatarEl) avatarEl.textContent = email.charAt(0).toUpperCase();
     await loadCardsFromDB();
     await loadProgressFromDB();
     await showAdminTabIfEligible();

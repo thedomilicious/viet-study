@@ -1036,3 +1036,148 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(circle
   .app-nav-tab{padding:14px 10px;font-size:11px;}
   .admin-field-row{grid-template-columns:1fr;}
 }
+
+/* ════════════════════════════
+   MOBILE RESPONSIVE — learn_viet
+════════════════════════════ */
+
+/* ── Nav: two-row layout on mobile ── */
+@media (max-width: 640px) {
+
+  /* Nav becomes two rows: logo+user on top, tabs on bottom */
+  .app-nav { padding: 0; }
+  .app-nav-inner {
+    flex-wrap: wrap;
+    padding: 0 16px;
+  }
+  .app-nav-logo {
+    font-size: 14px;
+    padding: 12px 12px 12px 0;
+    border-right: none;
+    margin-right: 0;
+    flex: 1;
+  }
+  .app-nav-user {
+    gap: 6px;
+    font-size: 11px;
+  }
+  .app-nav-user span {
+    display: none; /* hide email on mobile — too long */
+  }
+  .app-nav-user button {
+    padding: 5px 10px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  /* Tabs span full width on second row */
+  .app-nav-tabs {
+    width: 100%;
+    padding: 0;
+    border-top: 1px solid rgba(26,18,8,0.07);
+    justify-content: space-around;
+  }
+  .app-nav-tab {
+    flex: 1;
+    text-align: center;
+    padding: 11px 4px;
+    font-size: 11px;
+    letter-spacing: 0;
+  }
+
+  /* App wrapper tighter on mobile */
+  .app-wrapper { padding: 24px 16px 60px; }
+  .app { padding: 24px 16px 60px; }
+
+  /* Header */
+  .header { margin-bottom: 28px; }
+  .header h1 { font-size: 32px; }
+
+  /* Stats bar wraps */
+  .stats-bar { gap: 8px; }
+  .stat-pill { font-size: 12px; padding: 6px 14px; }
+
+  /* Search */
+  .search-input { font-size: 14px; padding: 12px 40px 12px 40px; }
+
+  /* Category tabs scroll */
+  .category-scroll { margin-bottom: 20px; }
+  .cat-btn { font-size: 12px; padding: 8px 14px; }
+
+  /* Flash card */
+  .card-face { padding: 28px 20px; min-height: 260px; }
+  .card-viet { font-size: 32px; }
+  .card-english { font-size: 26px; }
+
+  /* Nav row buttons */
+  .nav-btn { width: 44px; height: 44px; font-size: 18px; }
+  .counter-display { font-size: 16px; }
+  .counter-display strong { font-size: 22px; }
+
+  /* Verdict buttons */
+  .verdict-row { gap: 10px; }
+  .verdict-btn { padding: 10px 20px; font-size: 12px; }
+
+  /* Mode tabs — 2x2 grid */
+  .mode-tabs { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .mode-tab { padding: 12px 8px; }
+  .mode-icon { font-size: 18px; margin-bottom: 4px; }
+  .mode-name { font-size: 10px; }
+  .mode-desc { font-size: 9px; }
+
+  /* Difficulty row */
+  .diff-row { flex-direction: column; align-items: flex-start; gap: 8px; }
+
+  /* Practice screens */
+  .screen { padding: 20px 16px; }
+  .sb-prompt { font-size: 17px; }
+  .word-tile { padding: 8px 12px; font-size: 13px; }
+  .placed-tile { padding: 8px 12px; font-size: 13px; }
+
+  /* Gap fill */
+  .gf-text { font-size: 14px; }
+  .hint-chip { font-size: 12px; padding: 6px 12px; }
+  .gf-drop { min-width: 60px; font-size: 13px; }
+
+  /* Chat bubbles */
+  .bubble { font-size: 13px; padding: 10px 14px; max-width: 88%; }
+  .chat-input { font-size: 14px; }
+  .send-btn { font-size: 13px; padding: 10px 14px; }
+  .suggestion { font-size: 11px; padding: 6px 11px; }
+
+  /* Scenario picker */
+  .scenario-picker { grid-template-columns: repeat(2, 1fr); }
+
+  /* Admin */
+  .admin-field-row { grid-template-columns: 1fr; }
+  .admin-card-row { flex-wrap: wrap; gap: 6px; }
+  .admin-card-viet { min-width: 100%; font-size: 15px; }
+  .admin-card-cat { min-width: auto; }
+
+  /* Auth card */
+  .auth-card { padding: 28px 20px; }
+  .auth-logo { font-size: 24px; }
+
+  /* Mini card grid */
+  .grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+
+  /* XP bar */
+  .xp-bar { padding: 8px 14px; gap: 10px; }
+  .xp-label { font-size: 11px; }
+  .xp-level { font-size: 12px; }
+  .streak-badge { font-size: 11px; padding: 3px 8px; }
+
+  /* Teacher prep */
+  .tp-input-area { font-size: 14px; }
+
+  /* Buttons */
+  .btn { padding: 10px 20px; font-size: 13px; }
+  .btn-row { gap: 8px; }
+}
+
+/* ── Extra small phones (iPhone SE etc) ── */
+@media (max-width: 380px) {
+  .header h1 { font-size: 26px; }
+  .card-viet { font-size: 26px; }
+  .scenario-picker { grid-template-columns: 1fr; }
+  .stats-bar { flex-direction: column; align-items: center; }
+}
