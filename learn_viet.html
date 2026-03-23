@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Học Tiếng Việt</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; connect-src https://ufodnrwbbxfbbjzsowfc.supabase.co https://api.anthropic.com; img-src 'self' data:;">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="stylesheet" href="learn_viet_style.css">
+</head>
+<body>
+
+<!-- AUTH SCREEN -->
+<div class="auth-screen" id="authScreen">
+  <div class="auth-card">
+    <div class="auth-logo">Học Tiếng <em>Việt</em></div>
+    <div class="auth-sub">Sign in to save your progress</div>
+    <div class="auth-tab-row">
+      <button class="auth-tab active" onclick="setAuthMode('login')">Sign in</button>
+      <button class="auth-tab" onclick="setAuthMode('signup')">Sign up</button>
+    </div>
+    <div id="authForm">
+      <input class="auth-field" id="authEmail" type="email" placeholder="Email address" />
+      <input class="auth-field" id="authPassword" type="password" placeholder="Password" />
+      <button class="auth-btn" onclick="handleAuth()">Sign in</button>
+      <div class="auth-err" id="authErr"></div>
+    </div>
+  </div>
+</div>
+
+<!-- STICKY NAV -->
+<nav class="app-nav" id="appNav" style="display:none;">
+  <div class="app-nav-inner">
+    <div class="app-nav-logo">🇻🇳 Tiếng Việt</div>
+    <div class="app-nav-tabs">
+      <button class="app-nav-tab active" onclick="switchView('flashcards')">📚 Flashcards</button>
+      <button class="app-nav-tab" onclick="switchView('practice')">🎯 Practice</button>
+      <button class="app-nav-tab" onclick="switchView('admin')">⚙️ Admin</button>
+    </div>
+    <div class="app-nav-user">
+      <span id="navUserEmail"></span>
+      <button onclick="handleSignOut()">Sign out</button>
+    </div>
+  </div>
+</nav>
+
+<!-- FLASHCARDS VIEW -->
+<div class="app-view active" id="view-flashcards">
+  <div class="app-wrapper">
+    
+    <header class="header">
+    <div class="header-eyebrow">Bắt đầu học · Begin learning</div>
+    <h1>Học Tiếng <em>Việt</em></h1>
+    <p class="header-sub">Your personal Vietnamese flashcard deck</p>
+    <div class="header-divider"></div>
+  </header>
+
+  <div class="stats-bar">
+    <div class="stat-pill">Total: <span id="totalCount">0</span> cards</div>
+    <div class="stat-pill">Mastered: <span id="masteredCount">0</span></div>
+    <div class="stat-pill">Remaining: <span id="remainingCount">0</span></div>
+  </div>
+
+  <div class="search-wrap">
+    <span class="search-icon">🔍</span>
+    <input
+      type="text"
+      class="search-input"
+      id="searchInput"
+      placeholder="Search Vietnamese, English, or category…"
+      oninput="handleSearch(this.value)"
+      autocomplete="off"
+      spellcheck="false"
+    />
+    <button class="search-clear" id="searchClear" onclick="clearSearch()" title="Clear search">✕</button>
+  </div>
+
+  <div class="search-results-bar" id="searchResultsBar">
+    <span class="search-results-text" id="searchResultsText"></span>
+    <span class="search-results-sub" id="searchResultsSub"></span>
+  </div>
+
+  <div class="category-scroll">
+    <div class="categories" id="catTabs"></div>
+  </div>
+
+  <div class="mode-row">
+    <div class="mode-label"><strong id="catTitle">All Cards</strong> — click card to flip</div>
+    <div class="controls">
+      <button class="ctrl-btn" onclick="shuffleDeck()">⟳ Shuffle</button>
+      <button class="ctrl-btn" id="showAllBtn" onclick="toggleShowAll()">⊞ Grid</button>
+    </div>
+  </div>
+
+  <div class="progress-wrap">
+    <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="progress-text" id="progressText"></div>
+  </div>
+
+  <div id="flashMode">
+    <div class="card-stage" onclick="flipCard()">
+      <div class="flash-card" id="flashCard">
+        <div class="card-face card-front">
+          <div class="card-tag">Vietnamese</div>
+          <div class="card-category-badge" id="frontBadge"></div>
+          <div class="card-viet" id="frontViet"></div>
+          <div class="card-romanization" id="frontRoman"></div>
+          <button class="audio-btn" id="audioBtn" onclick="speakVietnamese(event)" title="Hear pronunciation">
+            <span class="audio-icon">▶</span>
+            <span class="audio-label">Listen</span>
+          </button>
+          <div class="card-flip-hint">tap to reveal →</div>
+        </div>
+        <div class="card-face card-back">
+          <div class="card-tag">English</div>
+          <div class="card-flip-hint">← tap to flip back</div>
+          <div class="card-english" id="backEnglish"></div>
+          <div class="card-accent"></div>
+          <div class="card-context" id="backContext"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="nav-row">
+      <button class="nav-btn" onclick="prevCard()" title="Previous">←</button>
+      <div class="counter-display"><strong id="curNum">1</strong> / <span id="totNum">1</span></div>
+      <button class="nav-btn" onclick="nextCard()" title="Next">→</button>
+    </div>
+
+    <div class="verdict-row">
+      <button class="verdict-btn not-yet" onclick="markCard(false)">✕ Still learning</button>
+      <button class="verdict-btn mastered" onclick="markCard(true)">✓ Got it!</button>
+    </div>
+  </div>
+
+  <div id="noResults" class="search-no-results">
+    <div class="search-no-results-icon">🔍</div>
+    <div class="search-no-results-text">No cards found</div>
+    <div class="search-no-results-sub">Try a different word or clear the search</div>
+  </div>
+
+  <div id="gridMode" style="display:none">
+    <div class="all-cards-section">
+      <div class="section-head">
+        <h2>All Cards</h2>
+        <span class="badge" id="gridBadge"></span>
+      </div>
+      <div class="grid" id="cardGrid"></div>
+    </div>
+  </div>
+</div>
+
+</div>
+  </div>
+</div>
+
+<!-- PRACTICE VIEW -->
+<div class="app-view" id="view-practice">
+  <div class="app-wrapper">
+    
+    <header class="header">
+    <div class="eyebrow">Luyện tập mỗi ngày · Practice every day</div>
+    <h1>Vietnamese <em>Practice</em></h1>
+    <p class="header-sub">4 modes · Auto-difficulty · Built around your lessons</p>
+    <div class="divider"></div>
+  </header>
+
+  <!-- XP Bar -->
+  <div class="xp-bar">
+    <span class="xp-label">Level</span>
+    <div class="xp-track"><div class="xp-fill" id="xpFill" style="width:0%"></div></div>
+    <span class="xp-level" id="xpLevel">1 · Beginner</span>
+    <span class="streak-badge" id="streakBadge">🔥 0 streak</span>
+  </div>
+
+  <!-- Mode Tabs -->
+  <div class="mode-tabs">
+    <div class="mode-tab active" onclick="setMode('scenario')">
+      <div class="mode-icon">🎭</div>
+      <div class="mode-name">Roleplay</div>
+      <div class="mode-desc">Real conversations</div>
+    </div>
+    <div class="mode-tab" onclick="setMode('sentence')">
+      <div class="mode-icon">🧩</div>
+      <div class="mode-name">Sentence</div>
+      <div class="mode-desc">Build sentences</div>
+    </div>
+    <div class="mode-tab" onclick="setMode('gapfill')">
+      <div class="mode-icon">✏️</div>
+      <div class="mode-name">Gap Fill</div>
+      <div class="mode-desc">Complete dialogues</div>
+    </div>
+    <div class="mode-tab" onclick="setMode('teacherprep')">
+      <div class="mode-icon">📋</div>
+      <div class="mode-name">Teacher Prep</div>
+      <div class="mode-desc">Before your lesson</div>
+    </div>
+  </div>
+
+  <!-- Difficulty Row -->
+  <div class="diff-row">
+    <span class="diff-label">Difficulty: auto-adapts based on your performance</span>
+    <div class="diff-pill">
+      <button class="diff-btn easy active-diff" id="diff-easy" onclick="setDiff('easy')">Easy</button>
+      <button class="diff-btn medium" id="diff-medium" onclick="setDiff('medium')">Medium</button>
+      <button class="diff-btn hard" id="diff-hard" onclick="setDiff('hard')">Hard</button>
+    </div>
+  </div>
+
+  <!-- ── SCREEN: SCENARIO ROLEPLAY ── -->
+  <div class="screen active" id="screen-scenario">
+    <div id="scenario-picker-view">
+      <div style="font-family:'Playfair Display',serif;font-size:20px;margin-bottom:6px;">Choose a scenario</div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:20px;">Pick a real-life situation to practise in Southern Vietnamese</p>
+      <div class="scenario-picker" id="scenarioPicker"></div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="startScenario()">Start Conversation →</button>
+      </div>
+    </div>
+    <div id="scenario-chat-view" style="display:none;">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+        <button onclick="backToScenarioPicker()" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--muted);">←</button>
+        <div>
+          <div style="font-weight:600;font-size:15px;" id="chatScenarioTitle"></div>
+          <div style="font-size:12px;color:var(--muted);" id="chatScenarioDesc"></div>
+        </div>
+        <div style="margin-left:auto;font-size:12px;color:var(--muted);" id="chatProgress"></div>
+      </div>
+      <div class="chat-box" id="chatBox"></div>
+      <div class="suggested-replies" id="suggestedReplies"></div>
+      <div class="chat-input-row">
+        <input class="chat-input" id="chatInput" placeholder="Type in Vietnamese… or use a suggestion above" onkeydown="if(event.key==='Enter')sendChat()"/>
+        <button class="send-btn" onclick="sendChat()">Send</button>
+      </div>
+    </div>
+    <div id="scenario-summary-view" style="display:none;"></div>
+  </div>
+
+  <!-- ── SCREEN: SENTENCE BUILDER ── -->
+  <div class="screen" id="screen-sentence">
+    <div id="sb-question-view">
+      <div style="font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--terracotta);margin-bottom:16px;" id="sbCatLabel"></div>
+      <div class="sb-prompt" id="sbPrompt"></div>
+      <div class="sb-eng" id="sbEng"></div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:10px;">Tap words to build the sentence:</p>
+      <div class="answer-slots" id="answerSlots" onclick="removeLastWord()"></div>
+      <div class="word-bank" id="wordBank"></div>
+      <div class="sb-feedback" id="sbFeedback" style="display:none;"></div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="sbCheckBtn" onclick="checkSentence()">Check Answer</button>
+        <button class="btn btn-secondary" onclick="nextSentence()">Skip →</button>
+        <span style="font-size:12px;color:var(--muted);margin-left:auto;" id="sbCounter"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SCREEN: GAP FILL ── -->
+  <div class="screen" id="screen-gapfill">
+    <div id="gf-view">
+      <div style="font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--terracotta);margin-bottom:6px;" id="gfTopicLabel"></div>
+      <div style="font-size:20px;font-family:'Playfair Display',serif;margin-bottom:4px;" id="gfScenarioTitle"></div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:20px;" id="gfScenarioDesc"></div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px;" class="gf-hint-label">Word bank — drag or tap a word, then tap a blank:</div>
+      <div class="gf-instructions">💡 Tap a word chip to select it (turns gold), then tap a blank to place it. Or drag chips directly into blanks. Tap a filled blank to return the word.</div>
+      <div class="word-hints" id="gfHints"></div>
+      <div class="gf-dialogue" id="gfDialogue"></div>
+      <div class="btn-row" style="margin-top:16px;">
+        <button class="btn btn-primary" onclick="checkGapFill()">Check Answers</button>
+        <button class="btn btn-secondary" onclick="nextGapFill()">Next Exercise →</button>
+        <span style="font-size:12px;color:var(--muted);margin-left:auto;" id="gfCounter"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SCREEN: TEACHER PREP ── -->
+  <div class="screen" id="screen-teacherprep">
+    <div style="font-family:'Playfair Display',serif;font-size:22px;margin-bottom:6px;">Teacher Prep</div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:20px;">Paste your lesson notes or type what you learned this week. I'll generate 10 targeted exercises to drill before your next class.</p>
+    <textarea class="tp-input-area" id="tpInput" placeholder="e.g. Today we learned: cơm vs gạo, sẽ for future tense, có...không questions, market vocabulary like chợ and siêu thị, cháo vịt..."></textarea>
+    <div class="btn-row" style="margin-bottom:24px;">
+      <button class="btn btn-primary" onclick="generateExercises()">Generate Exercises →</button>
+      <button class="btn btn-secondary" onclick="loadLastLesson()">Load last lesson's notes</button>
+    </div>
+    <div class="exercise-list" id="exerciseList"></div>
+  </div>
+
+</div>
+</div>
+  </div>
+</div>
+
+<!-- ADMIN VIEW -->
+<div class="app-view" id="view-admin">
+  <div class="app-wrapper">
+    <div style="font-family:'Playfair Display',serif;font-size:28px;font-weight:400;margin-bottom:6px;">Admin <em style="font-style:italic;color:var(--terracotta);">Panel</em></div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:24px;">Add and manage flashcard content. Requires your Supabase secret key (sb_secret_...).</p>
+
+    <div class="admin-key-row">
+      <input class="admin-key-input" id="adminKeyInput" type="password" placeholder="Paste secret key (sb_secret_...) to unlock..." />
+      <button class="btn btn-primary" onclick="unlockAdmin()" style="padding:11px 20px;border-radius:10px;">Unlock</button>
+      <button class="btn btn-secondary" onclick="lockAdmin()" style="padding:11px 20px;border-radius:10px;">Lock</button>
+    </div>
+
+    <div id="adminLocked" class="admin-locked">
+      <div class="admin-locked-icon">🔒</div>
+      <div style="font-size:15px;font-weight:500;color:var(--ink);margin-bottom:6px;">Admin locked</div>
+      <div style="font-size:13px;">Enter your secret key above to manage cards</div>
+    </div>
+
+    <div id="adminUnlocked" style="display:none;">
+      <!-- Add new card form -->
+      <div class="admin-form">
+        <h3 id="adminFormTitle">Add new card</h3>
+        <input type="hidden" id="editCardId" />
+        <div class="admin-field-row">
+          <input class="admin-input" id="aViet" placeholder="Vietnamese (e.g. Xin chào)" />
+          <input class="admin-input" id="aEng" placeholder="English (e.g. Hello)" />
+        </div>
+        <div class="admin-field-row">
+          <input class="admin-input" id="aPronun" placeholder="Pronunciation (e.g. sin chow)" />
+          <input class="admin-input" id="aCat" placeholder="Category (e.g. Greetings)" />
+        </div>
+        <input class="admin-input full" id="aContext" placeholder="Context note (e.g. Formal greeting, use any time)" style="width:100%;margin-bottom:14px;" />
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="saveCard()">Save card</button>
+          <button class="btn btn-secondary" id="cancelEditBtn" onclick="cancelEdit()" style="display:none;">Cancel edit</button>
+        </div>
+      </div>
+
+      <!-- Card list -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:10px;">
+        <div style="font-family:'Playfair Display',serif;font-size:18px;font-weight:400;">All cards <span id="adminCardCount" style="font-size:14px;color:var(--muted);font-family:'DM Sans',sans-serif;"></span></div>
+      </div>
+      <input class="admin-search" id="adminSearch" placeholder="Search cards..." oninput="renderAdminList()" />
+      <div class="admin-cards-list" id="adminCardsList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Shared toast -->
+<div class="toast" id="toast"></div>
+
+  <script src="learn_viet_app.js"></script>
+</body>
+</html>
