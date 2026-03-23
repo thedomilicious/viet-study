@@ -201,12 +201,18 @@
     <span class="streak-badge" id="streakBadge">🔥 0 streak</span>
   </div>
 
+  <!-- Topic filter -->
+  <div style="margin-bottom:16px;">
+    <div style="font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;">Topic</div>
+    <div class="category-scroll"><div class="categories" id="topicFilter"></div></div>
+  </div>
+
   <!-- Mode Tabs -->
-  <div class="mode-tabs">
+  <div class="mode-tabs" style="grid-template-columns:repeat(5,1fr);">
     <div class="mode-tab active" onclick="setMode('scenario')">
       <div class="mode-icon">🎭</div>
       <div class="mode-name">Roleplay</div>
-      <div class="mode-desc">Real conversations</div>
+      <div class="mode-desc">Conversations</div>
     </div>
     <div class="mode-tab" onclick="setMode('sentence')">
       <div class="mode-icon">🧩</div>
@@ -216,12 +222,17 @@
     <div class="mode-tab" onclick="setMode('gapfill')">
       <div class="mode-icon">✏️</div>
       <div class="mode-name">Gap Fill</div>
-      <div class="mode-desc">Complete dialogues</div>
+      <div class="mode-desc">Fill blanks</div>
+    </div>
+    <div class="mode-tab" onclick="setMode('listen')">
+      <div class="mode-icon">🎧</div>
+      <div class="mode-name">Listen</div>
+      <div class="mode-desc">Train your ear</div>
     </div>
     <div class="mode-tab" onclick="setMode('teacherprep')">
       <div class="mode-icon">📋</div>
       <div class="mode-name">Teacher Prep</div>
-      <div class="mode-desc">Before your lesson</div>
+      <div class="mode-desc">Lesson drills</div>
     </div>
   </div>
 
@@ -301,6 +312,11 @@
   </div>
 
   <!-- ── SCREEN: TEACHER PREP ── -->
+  <!-- ── SCREEN: LISTEN ── -->
+  <div class="screen" id="screen-listen">
+    <div id="listenView"></div>
+  </div>
+
   <div class="screen" id="screen-teacherprep">
     <div style="font-family:'Playfair Display',serif;font-size:22px;margin-bottom:6px;">Teacher Prep</div>
     <p style="font-size:13px;color:var(--muted);margin-bottom:20px;">Paste your lesson notes or type what you learned this week. I'll generate 10 targeted exercises to drill before your next class.</p>

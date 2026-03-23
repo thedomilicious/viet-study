@@ -399,6 +399,7 @@ async function deleteCard(id) {
 
 /* ── INIT ── */
 function initApp() {
+  buildTopicFilter();
   buildScenarioPicker();
   addXP(0);
   // Re-init flashcard state with DB cards
@@ -1009,7 +1010,6 @@ document.addEventListener('keydown', e => {
 
 init();
 
-
 /* ════════════════════════════
    PRACTICE MODULE
 ════════════════════════════ */
@@ -1018,137 +1018,217 @@ init();
 let xp = 0, streak = 0, consecutiveCorrect = 0, consecutiveWrong = 0;
 let diff = 'easy';
 let currentMode = 'scenario';
-let sbIndex = 0, gfIndex = 0;
-let selectedScenario = null;
-let chatState = null;
+let activeTopic = 'All';
 
-const LEVELS = [
-  {min:0,   label:'1 · Beginner'},
-  {min:50,  label:'2 · Learner'},
-  {min:120, label:'3 · Conversational'},
-  {min:250, label:'4 · Confident'},
-  {min:450, label:'5 · Fluent'},
-];
+// ── TOPICS ──
+const TOPICS = ['All','Food & Dining','Transport','Market & Shopping','Gym & Business','Daily Life','Café','Pharmacy','Barbershop'];
 
+// ── XP & DIFFICULTY ──
 function getLevel(x) {
+  const LEVELS = [{min:0,label:'1 · Beginner'},{min:50,label:'2 · Learner'},{min:120,label:'3 · Conversational'},{min:250,label:'4 · Confident'},{min:450,label:'5 · Fluent'}];
   for (let i = LEVELS.length-1; i >= 0; i--) if (x >= LEVELS[i].min) return LEVELS[i];
   return LEVELS[0];
 }
 
 function addXP(n) {
   xp += n;
-  const next = LEVELS.find(l => l.min > xp);
+  const next = [{min:0},{min:50},{min:120},{min:250},{min:450},{min:999}].find(l => l.min > xp);
   const prev = getLevel(xp);
   const maxXP = next ? next.min : prev.min + 100;
   const pct = Math.min(100, ((xp - prev.min) / (maxXP - prev.min)) * 100);
-  document.getElementById('xpFill').style.width = pct + '%';
-  document.getElementById('xpLevel').textContent = prev.label;
+  const fill = document.getElementById('xpFill');
+  const level = document.getElementById('xpLevel');
+  if (fill) fill.style.width = pct + '%';
+  if (level) level.textContent = prev.label;
 }
 
 function updateStreak(correct) {
   if (correct) {
     streak++; consecutiveCorrect++; consecutiveWrong = 0;
-    if (consecutiveCorrect >= 3) { setDiff(diff === 'easy' ? 'medium' : 'hard'); consecutiveCorrect = 0; showToast('Getting harder! 🔥'); }
+    if (consecutiveCorrect >= 3) {
+      const next = diff === 'easy' ? 'medium' : 'hard';
+      if (next !== diff) { setDiff(next); showToast('Level up! 🔥'); }
+      consecutiveCorrect = 0;
+    }
   } else {
     consecutiveWrong++; consecutiveCorrect = 0;
-    if (consecutiveWrong >= 2) { setDiff(diff === 'hard' ? 'medium' : 'easy'); consecutiveWrong = 0; showToast('Stepping back a level 📚'); }
+    if (consecutiveWrong >= 2) {
+      const prev = diff === 'hard' ? 'medium' : 'easy';
+      if (prev !== diff) { setDiff(prev); showToast('Stepping back 📚'); }
+      consecutiveWrong = 0;
+    }
     streak = 0;
   }
-  document.getElementById('streakBadge').textContent = `🔥 ${streak} streak`;
+  const badge = document.getElementById('streakBadge');
+  if (badge) badge.textContent = `🔥 ${streak} streak`;
 }
 
+// ── TOPIC FILTER ──
+function buildTopicFilter() {
+  const el = document.getElementById('topicFilter');
+  if (!el) return;
+  el.innerHTML = '';
+  TOPICS.forEach(t => {
+    const btn = document.createElement('button');
+    btn.className = 'topic-btn' + (t === activeTopic ? ' active' : '');
+    btn.textContent = t;
+    btn.onclick = () => setTopic(t);
+    el.appendChild(btn);
+  });
+}
+
+function setTopic(t) {
+  activeTopic = t;
+  document.querySelectorAll('.topic-btn').forEach(b => b.classList.toggle('active', b.textContent === t));
+  if (currentMode === 'scenario') buildScenarioPicker();
+  if (currentMode === 'sentence') loadSentence();
+  if (currentMode === 'gapfill') loadGapFill();
+  if (currentMode === 'listen') loadListen();
+}
+
+// ── MODE SWITCHER ──
 function setMode(m) {
   currentMode = m;
-  document.querySelectorAll('.mode-tab').forEach((t,i) => t.classList.toggle('active', ['scenario','sentence','gapfill','teacherprep'][i] === m));
+  document.querySelectorAll('.mode-tab').forEach((t,i) => {
+    t.classList.toggle('active', ['scenario','sentence','gapfill','listen'][i] === m);
+  });
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('screen-' + m).classList.add('active');
   if (m === 'sentence') loadSentence();
   if (m === 'gapfill') loadGapFill();
+  if (m === 'listen') loadListen();
+  if (m === 'scenario') buildScenarioPicker();
 }
 
 function setDiff(d) {
   diff = d;
   ['easy','medium','hard'].forEach(x => {
     const btn = document.getElementById('diff-' + x);
-    btn.classList.toggle('active-diff', x === d);
+    if (btn) btn.classList.toggle('active-diff', x === d);
   });
 }
 
-
-// ════════════════════════════════
+// ════════════════════
 // ── SCENARIOS ──
-// ════════════════════════════════
+// ════════════════════
 const SCENARIOS = [
   {
-    id:'restaurant', icon:'🍜', name:'Restaurant', desc:'Order food, ask about ingredients',
-    npc:'Nhân viên (Staff)', npcEng:'Restaurant staff',
+    id:'restaurant', icon:'🍜', name:'Restaurant', topic:'Food & Dining', desc:'Order food, no beef, ask about spice',
     easy:[
-      {npc:"Xin chào! Bạn muốn gì?", npcEng:"Hello! What would you like?", expect:"Cho tôi xem thực đơn", expectEng:"Can I see the menu?", hint:"Ask to see the menu", suggestions:["Cho tôi xem thực đơn","Xin chào!","Cảm ơn"]},
-      {npc:"Đây là thực đơn. Bạn muốn ăn gì?", npcEng:"Here is the menu. What would you like to eat?", expect:"Không có thịt bò", expectEng:"No beef please", hint:"Tell them no beef", suggestions:["Không có thịt bò","Cho tôi cơm","Tôi muốn cá"]},
-      {npc:"Được, bạn muốn uống gì?", npcEng:"Sure, what would you like to drink?", expect:"Cho tôi một ly nước", expectEng:"Give me a glass of water", hint:"Order water", suggestions:["Cho tôi một ly nước","Tôi muốn uống sữa","Không cảm ơn"]},
-      {npc:"Thức ăn ngon không?", npcEng:"Is the food good?", expect:"Ngon lắm! Cảm ơn", expectEng:"Really delicious! Thank you", hint:"Compliment the food", suggestions:["Ngon lắm! Cảm ơn","Ngon quá!","Không ngon lắm"]},
-      {npc:"Bạn cần gì thêm không?", npcEng:"Do you need anything else?", expect:"Tính tiền", expectEng:"Bill please", hint:"Ask for the bill", suggestions:["Tính tiền","Không, cảm ơn","Cho tôi thêm nước"]},
+      {npc:"Xin chào! Bạn muốn gì?", npcEng:"Hello! What would you like?", expect:"Cho tôi xem thực đơn", hint:"Ask to see the menu", suggestions:["Cho tôi xem thực đơn","Xin chào!","Có gì ngon không?"]},
+      {npc:"Đây là thực đơn. Bạn muốn ăn gì?", npcEng:"Here's the menu. What would you like?", expect:"Không có thịt bò", hint:"Tell them no beef", suggestions:["Không có thịt bò","Cho tôi cá","Tôi muốn cháo vịt"]},
+      {npc:"Được. Bạn muốn uống gì?", npcEng:"Sure. What would you like to drink?", expect:"Cho tôi một ly nước lọc", hint:"Order still water", suggestions:["Cho tôi một ly nước lọc","Trà đá","Không cảm ơn"]},
+      {npc:"Cay không?", npcEng:"Spicy?", expect:"Bớt cay được không?", hint:"Ask for less spice", suggestions:["Bớt cay được không?","Không cay","Cay được"]},
+      {npc:"Thức ăn ngon không?", npcEng:"Is the food good?", expect:"Ngon lắm! Tính tiền", hint:"Compliment then ask for bill", suggestions:["Ngon lắm! Tính tiền","Ngon quá!","Tính tiền cho tôi"]},
     ],
     medium:[
-      {npc:"Chào anh! Hôm nay anh muốn ăn gì?", npcEng:"Hello! What would you like today?", expect:"Cho tôi xem thực đơn. Tôi không ăn thịt bò", expectEng:"Can I see the menu? I don't eat beef", hint:"Ask for menu + mention no beef together", suggestions:["Cho tôi xem thực đơn. Tôi không ăn thịt bò","Có cháo vịt không?","Tôi muốn ăn cá"]},
-      {npc:"Dạ, có. Anh muốn cháo vịt hay cơm?", npcEng:"Yes we do. Would you like duck congee or rice?", expect:"Cháo vịt, không bỏ ngò", expectEng:"Duck congee, no coriander", hint:"Order + no coriander", suggestions:["Cháo vịt, không bỏ ngò","Cho tôi cơm","Tôi muốn cháo vịt"]},
-      {npc:"Cay không anh?", npcEng:"Spicy?", expect:"Bớt cay được không?", expectEng:"Can you make it less spicy?", hint:"Ask for less spice", suggestions:["Bớt cay được không?","Cay quá","Không cay"]},
-      {npc:"Dạ được. Uống gì không anh?", npcEng:"Sure. Anything to drink?", expect:"Cho tôi một ly nước lọc", expectEng:"Give me a glass of still water", hint:"Order still water", suggestions:["Cho tôi một ly nước lọc","Không cảm ơn","Một ly trà"]},
-      {npc:"Anh dùng bữa ngon không?", npcEng:"Did you enjoy your meal?", expect:"Ngon lắm! Tính tiền cho tôi", expectEng:"Very delicious! Bill please", hint:"Compliment + ask for bill", suggestions:["Ngon lắm! Tính tiền cho tôi","Ngon quá! Cảm ơn","Bao nhiêu tiền?"]},
+      {npc:"Chào anh! Hôm nay dùng gì ạ?", npcEng:"Hello! What would you like today?", expect:"Cho tôi xem thực đơn. Tôi không ăn thịt bò", hint:"Menu + no beef in one sentence", suggestions:["Cho tôi xem thực đơn. Tôi không ăn thịt bò","Có cháo vịt không?","Cho tôi gọi món"]},
+      {npc:"Dạ có. Anh muốn cháo vịt hay cơm gà?", npcEng:"Yes. Duck congee or chicken rice?", expect:"Cháo vịt, không bỏ ngò", hint:"Order + no coriander", suggestions:["Cháo vịt, không bỏ ngò","Cơm gà","Cháo vịt thôi"]},
+      {npc:"Cay không anh?", npcEng:"Spicy?", expect:"Cay quá, bớt cay được không?", hint:"Too spicy + ask to reduce", suggestions:["Cay quá, bớt cay được không?","Không cay","Ít cay thôi"]},
+      {npc:"Dạ được. Uống gì không anh?", npcEng:"Sure. Anything to drink?", expect:"Cho tôi một ly nước lọc, không đá", hint:"Water without ice", suggestions:["Cho tôi một ly nước lọc, không đá","Trà đá","Nước suối"]},
+      {npc:"Anh dùng xong chưa?", npcEng:"Are you finished?", expect:"Xong rồi. Ngon lắm! Tính tiền", hint:"Done + compliment + bill", suggestions:["Xong rồi. Ngon lắm! Tính tiền","Tính tiền","Cho tôi hoá đơn"]},
     ],
   },
   {
-    id:'grab', icon:'🛵', name:'Grab / Taxi', desc:'Directions, stops, small talk',
-    npc:'Tài xế (Driver)', npcEng:'Grab / taxi driver',
+    id:'grab', icon:'🛵', name:'Grab / Taxi', topic:'Transport', desc:'Directions, stops, small talk',
     easy:[
-      {npc:"Chào! Bạn đi đâu?", npcEng:"Hello! Where are you going?", expect:"Tôi muốn đi Quận 1", expectEng:"I want to go to District 1", hint:"Tell the driver your destination", suggestions:["Tôi muốn đi Quận 1","Cho tôi đến chợ Bến Thành","Tôi đi trung tâm"]},
-      {npc:"Kẹt xe quá hôm nay!", npcEng:"The traffic is terrible today!", expect:"Kẹt xe quá!", expectEng:"The traffic is terrible!", hint:"Agree about the traffic", suggestions:["Kẹt xe quá!","Vâng, kẹt xe","Thôi được rồi"]},
-      {npc:"Bạn ở đâu đến?", npcEng:"Where are you from?", expect:"Tôi đến từ Singapore", expectEng:"I'm from Singapore", hint:"Tell them where you're from", suggestions:["Tôi đến từ Singapore","Tôi là người Singapore","Tôi đến từ nước ngoài"]},
-      {npc:"Bạn ở Việt Nam lâu chưa?", npcEng:"Have you been in Vietnam long?", expect:"Tôi mới đến", expectEng:"I just arrived", hint:"Say you just arrived", suggestions:["Tôi mới đến","Tôi ở đây một tuần","Tôi ở đây lâu rồi"]},
-      {npc:"Đây rồi! Đến nơi rồi.", npcEng:"Here we are! We've arrived.", expect:"Cảm ơn anh nhiều!", expectEng:"Thank you so much!", hint:"Thank the driver", suggestions:["Cảm ơn anh nhiều!","Cảm ơn","Bao nhiêu tiền?"]},
+      {npc:"Chào! Bạn đi đâu?", npcEng:"Hello! Where are you going?", expect:"Cho tôi đến Quận 1", hint:"Tell driver your destination", suggestions:["Cho tôi đến Quận 1","Tôi đi trung tâm","Cho tôi đến chợ Bến Thành"]},
+      {npc:"Kẹt xe quá hôm nay!", npcEng:"Traffic is terrible today!", expect:"Kẹt xe quá!", hint:"Agree about traffic", suggestions:["Kẹt xe quá!","Vâng, kẹt xe","Thôi được rồi"]},
+      {npc:"Bạn ở đâu đến?", npcEng:"Where are you from?", expect:"Tôi đến từ Singapore", hint:"Say where you're from", suggestions:["Tôi đến từ Singapore","Tôi là người nước ngoài","Tôi ở Singapore"]},
+      {npc:"Gần đến rồi. Dừng ở đâu?", npcEng:"Almost there. Where to stop?", expect:"Dừng đây được không?", hint:"Ask to stop here", suggestions:["Dừng đây được không?","Đi thêm một chút","Dừng trước cổng"]},
+      {npc:"Đây rồi! Cảm ơn anh nhé.", npcEng:"Here we are! Thank you.", expect:"Cảm ơn anh nhiều!", hint:"Thank the driver warmly", suggestions:["Cảm ơn anh nhiều!","Cảm ơn","Thanh toán bằng thẻ được không?"]},
     ],
     medium:[
-      {npc:"Anh đi đâu vậy?", npcEng:"Where are you headed?", expect:"Cho tôi đến đường Lê Lợi, Quận 1", expectEng:"Take me to Le Loi street, District 1", hint:"Give street + district", suggestions:["Cho tôi đến đường Lê Lợi, Quận 1","Tôi muốn đến siêu thị","Cho tôi đến chợ Bến Thành"]},
-      {npc:"Anh muốn đi đường nào? Có kẹt xe đó.", npcEng:"Which route do you want? There's traffic.", expect:"Đi đường nào nhanh hơn?", expectEng:"Which road is faster?", hint:"Ask which route is faster", suggestions:["Đi đường nào nhanh hơn?","Thôi được rồi, anh chọn đi","Đi thẳng đi"]},
-      {npc:"Tôi sẽ đi đường vòng cho nhanh.", npcEng:"I'll take the bypass to go faster.", expect:"Được, cảm ơn anh", expectEng:"OK, thank you", hint:"Agree politely", suggestions:["Được, cảm ơn anh","Thôi được rồi","Nhanh không?"]},
-      {npc:"Gần đến rồi. Dừng ở đâu anh?", npcEng:"Almost there. Where do you want to stop?", expect:"Dừng đây được không?", expectEng:"Can you stop here?", hint:"Ask to stop here", suggestions:["Dừng đây được không?","Đi thẳng thêm một chút","Dừng trước cổng đó"]},
-      {npc:"Anh có tiền lẻ không? Tôi không có tiền thối.", npcEng:"Do you have small bills? I don't have change.", expect:"Tiền lẻ không?", expectEng:"Do you have change?", hint:"Ask about change", suggestions:["Thanh toán bằng thẻ được không?","Tôi có tiền lẻ","Không sao, để tôi xem"]},
+      {npc:"Anh đi đâu vậy?", npcEng:"Where are you headed?", expect:"Cho tôi đến đường Lê Lợi, Quận 1", hint:"Give street + district", suggestions:["Cho tôi đến đường Lê Lợi, Quận 1","Tôi muốn đến siêu thị","Cho tôi đến chợ Bến Thành"]},
+      {npc:"Đường nào nhanh hơn?", npcEng:"Which road is faster?", expect:"Đi đường nào nhanh hơn?", hint:"Ask which route is faster", suggestions:["Đi đường nào nhanh hơn?","Anh chọn đi","Đường tránh kẹt xe"]},
+      {npc:"Tôi đi đường vòng cho nhanh.", npcEng:"I'll take the bypass to go faster.", expect:"Được, cảm ơn anh", hint:"Agree politely", suggestions:["Được, cảm ơn anh","Thôi được rồi","Nhanh không?"]},
+      {npc:"Anh có tiền lẻ không? Tôi không có tiền thối.", npcEng:"Do you have small bills? No change.", expect:"Thanh toán bằng thẻ được không?", hint:"Ask to pay by card", suggestions:["Thanh toán bằng thẻ được không?","Tôi có tiền lẻ","Không sao, để tôi xem"]},
+      {npc:"Đến rồi. Cảm ơn anh đã đi.", npcEng:"We're here. Thanks for riding.", expect:"Cảm ơn anh. Lái xe cẩn thận nhé!", hint:"Thank + safe driving", suggestions:["Cảm ơn anh. Lái xe cẩn thận nhé!","Cảm ơn nhiều","Tạm biệt"]},
     ],
   },
   {
-    id:'market', icon:'🛒', name:'Wet Market', desc:'Buy produce, negotiate prices',
-    npc:'Người bán (Vendor)', npcEng:'Market vendor',
+    id:'market', icon:'🛒', name:'Wet Market', topic:'Market & Shopping', desc:'Buy produce, negotiate prices',
     easy:[
-      {npc:"Mua gì không em?", npcEng:"What would you like to buy?", expect:"Cho tôi xem rau", expectEng:"Let me look at the vegetables", hint:"Ask to look at vegetables", suggestions:["Cho tôi xem rau","Bao nhiêu tiền?","Tôi muốn mua cá"]},
-      {npc:"Rau tươi lắm! Bao nhiêu muốn mua?", npcEng:"Very fresh vegetables! How much do you want?", expect:"Một ký", expectEng:"One kilogram", hint:"Ask for 1 kilo", suggestions:["Một ký","Nửa ký","Hai ký"]},
-      {npc:"Năm mươi ngàn một ký.", npcEng:"50,000 dong per kilogram.", expect:"Đắt quá!", expectEng:"Too expensive!", hint:"Exclaim it's expensive", suggestions:["Đắt quá!","Mắc vậy trời!","Rẻ hơn được không?"]},
-      {npc:"Thôi được, bốn mươi ngàn cho em.", npcEng:"OK, 40,000 for you.", expect:"Được, cảm ơn chị", expectEng:"OK, thank you", hint:"Agree and thank them", suggestions:["Được, cảm ơn chị","Cảm ơn","Rẻ hơn nữa không?"]},
-      {npc:"Còn muốn mua gì nữa không?", npcEng:"Do you want to buy anything else?", expect:"Còn chuối không?", expectEng:"Do you still have bananas?", hint:"Ask if they have bananas", suggestions:["Còn chuối không?","Không, cảm ơn","Cho tôi thêm cà chua"]},
+      {npc:"Mua gì không em?", npcEng:"What would you like to buy?", expect:"Cho tôi xem cá", hint:"Ask to look at fish", suggestions:["Cho tôi xem cá","Bao nhiêu tiền?","Tôi muốn mua rau"]},
+      {npc:"Cá tươi lắm! Bao nhiêu muốn mua?", npcEng:"Very fresh! How much?", expect:"Một ký", hint:"One kilogram", suggestions:["Một ký","Nửa ký","Hai ký"]},
+      {npc:"Tám mươi ngàn một ký.", npcEng:"80,000 dong per kilo.", expect:"Mắc vậy trời! Rẻ hơn được không?", hint:"Too expensive + negotiate", suggestions:["Mắc vậy trời! Rẻ hơn được không?","Đắt quá!","Bảy mươi ngàn được không?"]},
+      {npc:"Thôi bảy mươi ngàn cho em.", npcEng:"OK 70,000 for you.", expect:"Được, cảm ơn chị", hint:"Agree and thank", suggestions:["Được, cảm ơn chị","Cảm ơn","Rẻ hơn nữa không?"]},
+      {npc:"Còn muốn mua gì nữa không?", npcEng:"Anything else?", expect:"Còn trứng không?", hint:"Ask about eggs", suggestions:["Còn trứng không?","Hổng có gì nữa","Cho tôi thêm rau"]},
     ],
     medium:[
-      {npc:"Em ơi! Mua gì đây?", npcEng:"Hey! What are you buying?", expect:"Cho tôi nửa ký cá tươi", expectEng:"Give me half a kilo of fresh fish", hint:"Order half kilo of fresh fish", suggestions:["Cho tôi nửa ký cá tươi","Cá hôm nay tươi không?","Bao nhiêu tiền một ký?"]},
-      {npc:"Cá tươi lắm! Bắt sáng nay đó. Bao nhiêu?", npcEng:"Very fresh! Caught this morning. How much?", expect:"Bao nhiêu một ký?", expectEng:"How much per kilogram?", hint:"Ask price per kilo", suggestions:["Bao nhiêu một ký?","Đắt không?","Cho tôi xem"]},
-      {npc:"Tám mươi ngàn một ký.", npcEng:"80,000 dong per kilo.", expect:"Mắc vậy trời! Rẻ hơn được không?", expectEng:"Wow so expensive! Can it be cheaper?", hint:"React to price + negotiate", suggestions:["Mắc vậy trời! Rẻ hơn được không?","Đắt quá!","Bảy mươi ngàn được không?"]},
-      {npc:"Thôi bảy mươi ngàn cho em, lấy đi.", npcEng:"OK 70,000 for you, take it.", expect:"Coi bộ được đó. Cho tôi một ký", expectEng:"Looks good. Give me one kilo", hint:"Accept the deal + order", suggestions:["Coi bộ được đó. Cho tôi một ký","Được rồi, cảm ơn","Cho tôi nửa ký thôi"]},
-      {npc:"Còn cần gì nữa không em?", npcEng:"Do you need anything else?", expect:"Còn trứng không?", expectEng:"Do you still have eggs?", hint:"Ask about eggs", suggestions:["Còn trứng không?","Hổng có gì nữa, cảm ơn","Cho tôi thêm rau"]},
+      {npc:"Em ơi! Mua gì đây?", npcEng:"Hey! What are you buying?", expect:"Cho tôi nửa ký cá tươi", hint:"Half kilo fresh fish", suggestions:["Cho tôi nửa ký cá tươi","Cá hôm nay tươi không?","Bao nhiêu một ký?"]},
+      {npc:"Tám mươi ngàn một ký.", npcEng:"80,000 per kilo.", expect:"Mắc vậy trời! Rẻ hơn được không?", hint:"React and negotiate", suggestions:["Mắc vậy trời! Rẻ hơn được không?","Đắt quá!","Bảy mươi ngàn được không?"]},
+      {npc:"Thôi bảy mươi ngàn cho em, lấy đi.", npcEng:"OK 70,000 for you, take it.", expect:"Coi bộ được đó. Cho tôi một ký", hint:"Accept + order one kilo", suggestions:["Coi bộ được đó. Cho tôi một ký","Được rồi","Nửa ký thôi"]},
+      {npc:"Còn cần gì nữa không em?", npcEng:"Anything else?", expect:"Còn quả chuối không?", hint:"Ask about bananas", suggestions:["Còn quả chuối không?","Hổng có gì","Cho tôi thêm rau"]},
+      {npc:"Dạ còn. Bao nhiêu?", npcEng:"Yes, we have. How many?", expect:"Cho tôi một nải", hint:"Ask for a bunch", suggestions:["Cho tôi một nải","Nửa ký","Năm quả"]},
     ],
   },
   {
-    id:'gym', icon:'💪', name:'Gym / Business', desc:'Talk to staff, potential members',
-    npc:'Nhân viên Gym', npcEng:'Gym staff / member',
+    id:'gym', icon:'💪', name:'Gym / Business', topic:'Gym & Business', desc:'Staff, members, negotiations',
     easy:[
-      {npc:"Chào anh! Anh muốn tập gì?", npcEng:"Hello! What would you like to train?", expect:"Tôi muốn đăng ký tập", expectEng:"I want to sign up to train", hint:"Express interest in signing up", suggestions:["Tôi muốn đăng ký tập","Cho tôi xem phòng tập","Phòng tập ở đâu?"]},
-      {npc:"Dạ, anh đã tập bao lâu rồi?", npcEng:"How long have you been training?", expect:"Tôi tập ba năm rồi", expectEng:"I've been training for 3 years", hint:"Say how long you've trained", suggestions:["Tôi tập ba năm rồi","Tôi mới tập","Tôi tập lâu rồi"]},
-      {npc:"Anh thích tập gì? Cardio hay tạ?", npcEng:"What do you like to train? Cardio or weights?", expect:"Tôi thích tập tạ", expectEng:"I like weight training", hint:"Say you prefer weights", suggestions:["Tôi thích tập tạ","Tôi thích cardio","Tôi thích cả hai"]},
-      {npc:"Anh có thể xem phòng tập không?", npcEng:"Would you like to see the gym?", expect:"Được, cảm ơn", expectEng:"Sure, thank you", hint:"Agree to the tour", suggestions:["Được, cảm ơn","Vâng, tôi muốn xem","Thôi được rồi"]},
-      {npc:"Phòng tập thế nào ạ?", npcEng:"What do you think of the gym?", expect:"Coi bộ được đó!", expectEng:"Looks pretty good!", hint:"Give a positive Southern reaction", suggestions:["Coi bộ được đó!","Tốt lắm!","Đẹp quá!"]},
+      {npc:"Chào anh! Anh muốn tập gì?", npcEng:"Hello! What would you like to train?", expect:"Tôi muốn đăng ký tập", hint:"Say you want to sign up", suggestions:["Tôi muốn đăng ký tập","Cho tôi xem phòng tập","Phòng tập ở đâu?"]},
+      {npc:"Dạ. Anh đã tập bao lâu rồi?", npcEng:"How long have you been training?", expect:"Tôi tập ba năm rồi", hint:"Say 3 years", suggestions:["Tôi tập ba năm rồi","Tôi mới tập","Tôi tập lâu rồi"]},
+      {npc:"Anh thích tập gì? Cardio hay tạ?", npcEng:"Cardio or weights?", expect:"Tôi thích tập tạ", hint:"Say you prefer weights", suggestions:["Tôi thích tập tạ","Tôi thích cardio","Tôi thích cả hai"]},
+      {npc:"Phòng tập thế nào ạ?", npcEng:"What do you think of the gym?", expect:"Coi bộ được đó!", hint:"Southern approval phrase", suggestions:["Coi bộ được đó!","Tốt lắm!","Đẹp quá!"]},
+      {npc:"Anh muốn đăng ký gói nào?", npcEng:"Which package do you want?", expect:"Bao nhiêu tiền một tháng?", hint:"Ask monthly price", suggestions:["Bao nhiêu tiền một tháng?","Anh có thể giảm giá không?","Cho tôi suy nghĩ"]},
     ],
     medium:[
-      {npc:"Chào anh! Anh là khách mới hay đã là thành viên?", npcEng:"Hello! Are you new or already a member?", expect:"Tôi là khách mới. Tôi muốn đăng ký tập", expectEng:"I'm a new customer. I want to sign up", hint:"Identify yourself + intent", suggestions:["Tôi là khách mới. Tôi muốn đăng ký tập","Tôi muốn xem phòng tập trước","Có gói tháng không?"]},
-      {npc:"Dạ, chúng tôi có gói tháng và gói năm. Anh muốn biết thêm không?", npcEng:"We have monthly and yearly packages. Would you like more info?", expect:"Bao nhiêu tiền một tháng?", expectEng:"How much per month?", hint:"Ask the monthly price", suggestions:["Bao nhiêu tiền một tháng?","Anh có thể giảm giá không?","Có thể xem thêm không?"]},
-      {npc:"Gói tháng là hai triệu đồng.", npcEng:"Monthly package is 2 million dong.", expect:"Anh có thể giảm giá không?", expectEng:"Can you lower the price?", hint:"Negotiate the price", suggestions:["Anh có thể giảm giá không?","Mắc quá!","Để tôi suy nghĩ thêm"]},
-      {npc:"Anh là người nước ngoài nên chúng tôi có thể giảm mười phần trăm.", npcEng:"Since you're a foreigner, we can give 10% off.", expect:"Được, cho tôi đăng ký", expectEng:"OK, let me sign up", hint:"Accept the offer", suggestions:["Được, cho tôi đăng ký","Cảm ơn, được rồi","Để tôi suy nghĩ thêm"]},
-      {npc:"Lịch tập của anh thế nào? Anh tập mấy ngày?", npcEng:"What's your training schedule? How many days?", expect:"Tôi tập bốn ngày một tuần", expectEng:"I train four days a week", hint:"Say your training frequency", suggestions:["Tôi tập bốn ngày một tuần","Tôi tập mỗi ngày","Tôi tập cuối tuần"]},
+      {npc:"Anh là khách mới hay thành viên?", npcEng:"New or existing member?", expect:"Tôi là khách mới. Tôi muốn đăng ký tập", hint:"New customer + intent", suggestions:["Tôi là khách mới. Tôi muốn đăng ký tập","Tôi muốn xem phòng tập trước","Có gói tháng không?"]},
+      {npc:"Gói tháng là hai triệu đồng.", npcEng:"Monthly is 2 million dong.", expect:"Anh có thể giảm giá không?", hint:"Negotiate politely", suggestions:["Anh có thể giảm giá không?","Mắc quá!","Để tôi suy nghĩ thêm"]},
+      {npc:"Vì anh là người nước ngoài, giảm mười phần trăm.", npcEng:"10% off for foreigners.", expect:"Được, cho tôi đăng ký", hint:"Accept the offer", suggestions:["Được, cho tôi đăng ký","Cảm ơn, được rồi","Để tôi suy nghĩ thêm"]},
+      {npc:"Lịch tập của anh thế nào?", npcEng:"What's your training schedule?", expect:"Tôi tập bốn ngày một tuần", hint:"Say four days a week", suggestions:["Tôi tập bốn ngày một tuần","Mỗi ngày","Cuối tuần"]},
+      {npc:"Mình có thể nói chuyện riêng không?", npcEng:"Can we speak privately?", expect:"Được, tôi có thời gian", hint:"Agree you have time", suggestions:["Được, tôi có thời gian","Tất nhiên","Để tôi suy nghĩ thêm"]},
+    ],
+  },
+  {
+    id:'cafe', icon:'☕', name:'Café', topic:'Café', desc:'Order drinks, ask for wifi',
+    easy:[
+      {npc:"Xin chào! Bạn muốn gì?", npcEng:"Hello! What would you like?", expect:"Cho tôi một ly cà phê sữa đá", hint:"Iced milk coffee", suggestions:["Cho tôi một ly cà phê sữa đá","Trà sữa","Nước cam"]},
+      {npc:"Size lớn hay vừa?", npcEng:"Large or medium?", expect:"Vừa thôi", hint:"Medium size", suggestions:["Vừa thôi","Lớn","Nhỏ"]},
+      {npc:"Uống ở đây hay mang về?", npcEng:"Dine in or takeaway?", expect:"Uống ở đây", hint:"Dine in", suggestions:["Uống ở đây","Mang về","Ở đây"]},
+      {npc:"Dạ, mật khẩu wifi là gì?", npcEng:"What's the wifi password?", expect:"Cho tôi mật khẩu wifi được không?", hint:"Ask for wifi password", suggestions:["Cho tôi mật khẩu wifi được không?","Wifi tên gì?","Có wifi không?"]},
+      {npc:"Mật khẩu là cafehanoi123.", npcEng:"Password is cafehanoi123.", expect:"Cảm ơn bạn nhiều!", hint:"Thank warmly", suggestions:["Cảm ơn bạn nhiều!","Cảm ơn","Ok được rồi"]},
+    ],
+    medium:[
+      {npc:"Chào anh! Hôm nay uống gì?", npcEng:"Hello! What are you drinking today?", expect:"Cho tôi cà phê sữa đá, ít đường", hint:"Iced coffee, less sugar", suggestions:["Cho tôi cà phê sữa đá, ít đường","Trà đào","Matcha latte"]},
+      {npc:"Anh muốn ngồi ở đâu?", npcEng:"Where would you like to sit?", expect:"Chỗ nào gần cửa sổ được không?", hint:"Ask for a window seat", suggestions:["Chỗ nào gần cửa sổ được không?","Ở trong","Bất kỳ chỗ nào"]},
+      {npc:"Dạ được. Anh cần gì thêm không?", npcEng:"Sure. Anything else?", expect:"Cho tôi mật khẩu wifi và ổ cắm điện", hint:"Wifi + power socket", suggestions:["Cho tôi mật khẩu wifi và ổ cắm điện","Chỉ wifi thôi","Không cần gì"]},
+      {npc:"Wifi là thecafe2024, ổ cắm ở cạnh bàn.", npcEng:"Wifi is thecafe2024, socket next to table.", expect:"Cảm ơn. Cho tôi thêm một ly nữa sau", hint:"Thanks + order another later", suggestions:["Cảm ơn. Cho tôi thêm một ly nữa sau","Cảm ơn nhiều","Ok"]},
+      {npc:"Dạ. Anh làm việc ở đây lâu không?", npcEng:"Are you working here long?", expect:"Có lẽ hai tiếng", hint:"Maybe two hours", suggestions:["Có lẽ hai tiếng","Khoảng một tiếng","Chưa biết"]},
+    ],
+  },
+  {
+    id:'pharmacy', icon:'💊', name:'Pharmacy', topic:'Pharmacy', desc:'Describe symptoms, buy medicine',
+    easy:[
+      {npc:"Xin chào! Bạn cần gì?", npcEng:"Hello! What do you need?", expect:"Tôi bị đau đầu", hint:"Say you have a headache", suggestions:["Tôi bị đau đầu","Tôi bị sốt","Tôi bị đau bụng"]},
+      {npc:"Bị lâu chưa?", npcEng:"How long have you had it?", expect:"Từ sáng nay", hint:"Since this morning", suggestions:["Từ sáng nay","Hai ngày rồi","Mới bị"]},
+      {npc:"Có bị sốt không?", npcEng:"Do you have a fever?", expect:"Không, chỉ đau đầu thôi", hint:"No, just headache", suggestions:["Không, chỉ đau đầu thôi","Dạ có","Tôi không biết"]},
+      {npc:"Cho anh thuốc giảm đau nhé.", npcEng:"I'll give you some painkillers.", expect:"Uống mấy viên?", hint:"Ask how many tablets", suggestions:["Uống mấy viên?","Cảm ơn","Bao nhiêu tiền?"]},
+      {npc:"Ngày uống hai lần, mỗi lần hai viên.", npcEng:"Twice a day, two tablets each time.", expect:"Cảm ơn! Bao nhiêu tiền?", hint:"Thank + ask price", suggestions:["Cảm ơn! Bao nhiêu tiền?","Ok, cảm ơn","Có tác dụng phụ không?"]},
+    ],
+    medium:[
+      {npc:"Chào anh! Anh cần gì ạ?", npcEng:"Hello! What do you need?", expect:"Tôi bị đau bụng và tiêu chảy từ hôm qua", hint:"Stomach pain + diarrhea since yesterday", suggestions:["Tôi bị đau bụng và tiêu chảy từ hôm qua","Tôi bị cảm","Tôi cần thuốc ho"]},
+      {npc:"Anh có sốt không? Bao nhiêu độ?", npcEng:"Do you have a fever? What temperature?", expect:"Không sốt, nhưng người mệt lắm", hint:"No fever but very tired", suggestions:["Không sốt, nhưng người mệt lắm","Sốt nhẹ","Tôi không đo"]},
+      {npc:"Anh ăn gì tối qua?", npcEng:"What did you eat last night?", expect:"Tôi ăn đồ ăn đường phố", hint:"Street food", suggestions:["Tôi ăn đồ ăn đường phố","Tôi ăn hải sản","Tôi không nhớ"]},
+      {npc:"Cho anh thuốc tiêu hoá và oresol nhé.", npcEng:"I'll give you digestive medicine and oresol.", expect:"Uống như thế nào?", hint:"How to take it?", suggestions:["Uống như thế nào?","Cảm ơn","Có cần uống hết không?"]},
+      {npc:"Mỗi gói oresol hoà với một lít nước ấm.", npcEng:"One oresol packet in one litre of warm water.", expect:"Cảm ơn. Có cần đơn thuốc không?", hint:"Thanks + ask about prescription", suggestions:["Cảm ơn. Có cần đơn thuốc không?","Ok, cảm ơn","Bao nhiêu tiền tất cả?"]},
+    ],
+  },
+  {
+    id:'barbershop', icon:'💈', name:'Barbershop', topic:'Barbershop', desc:'Haircut, explain what you want',
+    easy:[
+      {npc:"Chào anh! Anh muốn cắt kiểu gì?", npcEng:"Hello! What style would you like?", expect:"Cắt ngắn thôi", hint:"Just cut it short", suggestions:["Cắt ngắn thôi","Tỉa gọn","Undercut"]},
+      {npc:"Hai bên cắt ngắn không?", npcEng:"Short on the sides?", expect:"Dạ, hai bên ngắn, trên để dài hơn", hint:"Short sides, longer on top", suggestions:["Dạ, hai bên ngắn, trên để dài hơn","Ngắn hết","Hai bên để vừa"]},
+      {npc:"Gáy vuông hay tròn?", npcEng:"Square or round at the nape?", expect:"Vuông", hint:"Square nape", suggestions:["Vuông","Tròn","Tự nhiên"]},
+      {npc:"Có muốn gội đầu không?", npcEng:"Would you like a shampoo?", expect:"Dạ có, cảm ơn", hint:"Yes please", suggestions:["Dạ có, cảm ơn","Không cần","Có thêm tiền không?"]},
+      {npc:"Anh thấy sao?", npcEng:"What do you think?", expect:"Đẹp lắm! Cảm ơn anh", hint:"Looks great, thank you", suggestions:["Đẹp lắm! Cảm ơn anh","Ổn rồi","Cắt thêm một chút nữa được không?"]},
+    ],
+    medium:[
+      {npc:"Hôm nay anh muốn làm gì?", npcEng:"What are we doing today?", expect:"Cắt và tỉa râu", hint:"Cut and trim beard", suggestions:["Cắt và tỉa râu","Chỉ cắt thôi","Cạo râu"]},
+      {npc:"Anh muốn cắt kiểu gì trên đầu?", npcEng:"What style on top?", expect:"Để dài trên, fade hai bên", hint:"Long on top, fade on sides", suggestions:["Để dài trên, fade hai bên","Undercut","Cắt đều"]},
+      {npc:"Fade cao hay thấp?", npcEng:"High or low fade?", expect:"Fade thấp thôi", hint:"Low fade", suggestions:["Fade thấp thôi","Cao","Vừa vừa"]},
+      {npc:"Râu để dài bao nhiêu?", npcEng:"How long for the beard?", expect:"Tỉa gọn thôi, đừng cạo", hint:"Just tidy, don't shave", suggestions:["Tỉa gọn thôi, đừng cạo","Cạo hết","Để vậy"]},
+      {npc:"Anh thấy vừa ý chưa?", npcEng:"Are you satisfied?", expect:"Vừa ý rồi. Bao nhiêu tiền?", hint:"Satisfied + ask price", suggestions:["Vừa ý rồi. Bao nhiêu tiền?","Cắt thêm hai bên","Đẹp lắm!"]},
     ],
   },
 ];
@@ -1157,26 +1237,39 @@ let selectedScenarioObj = null;
 let currentScenarioSteps = [];
 let chatStepIndex = 0;
 
+function getFilteredScenarios() {
+  if (activeTopic === 'All') return SCENARIOS;
+  return SCENARIOS.filter(s => s.topic === activeTopic || s.id === activeTopic.toLowerCase().replace(/\s.*/,''));
+}
+
 function buildScenarioPicker() {
   const el = document.getElementById('scenarioPicker');
+  if (!el) return;
   el.innerHTML = '';
-  SCENARIOS.forEach((s, i) => {
+  const filtered = getFilteredScenarios();
+  filtered.forEach((s, i) => {
     const d = document.createElement('div');
     d.className = 'scenario-card' + (i === 0 ? ' selected' : '');
     d.innerHTML = `<div class="sc-icon">${s.icon}</div><div class="sc-name">${s.name}</div><div class="sc-desc">${s.desc}</div>`;
-    d.onclick = () => { document.querySelectorAll('.scenario-card').forEach(c => c.classList.remove('selected')); d.classList.add('selected'); selectedScenarioObj = s; };
+    d.onclick = () => {
+      document.querySelectorAll('.scenario-card').forEach(c => c.classList.remove('selected'));
+      d.classList.add('selected');
+      selectedScenarioObj = s;
+    };
     el.appendChild(d);
   });
-  selectedScenarioObj = SCENARIOS[0];
+  selectedScenarioObj = filtered[0] || SCENARIOS[0];
 }
 
 function startScenario() {
   if (!selectedScenarioObj) return;
-  const steps = diff === 'hard' ? (selectedScenarioObj.medium || selectedScenarioObj.easy) : selectedScenarioObj[diff] || selectedScenarioObj.easy;
+  const steps = (diff === 'medium' || diff === 'hard')
+    ? (selectedScenarioObj.medium || selectedScenarioObj.easy)
+    : selectedScenarioObj.easy;
   currentScenarioSteps = steps;
   chatStepIndex = 0;
   document.getElementById('chatScenarioTitle').textContent = selectedScenarioObj.icon + ' ' + selectedScenarioObj.name;
-  document.getElementById('chatScenarioDesc').textContent = 'Playing as: ' + selectedScenarioObj.npcEng;
+  document.getElementById('chatScenarioDesc').textContent = 'Playing as: Customer / Guest';
   document.getElementById('scenario-picker-view').style.display = 'none';
   document.getElementById('scenario-chat-view').style.display = 'block';
   document.getElementById('chatBox').innerHTML = '';
@@ -1186,14 +1279,23 @@ function startScenario() {
 }
 
 function updateChatProgress() {
-  document.getElementById('chatProgress').textContent = `${chatStepIndex + 1} / ${currentScenarioSteps.length}`;
+  const el = document.getElementById('chatProgress');
+  if (el) el.textContent = `${chatStepIndex + 1} / ${currentScenarioSteps.length}`;
 }
 
 function addBubble(type, text, subtext) {
   const box = document.getElementById('chatBox');
   const b = document.createElement('div');
   b.className = 'bubble ' + type;
-  b.innerHTML = text + (subtext ? `<div class="viet-hint">${subtext}</div>` : '');
+  const textNode = document.createElement('div');
+  textNode.textContent = text;
+  b.appendChild(textNode);
+  if (subtext) {
+    const sub = document.createElement('div');
+    sub.className = 'viet-hint';
+    sub.textContent = subtext;
+    b.appendChild(sub);
+  }
   box.appendChild(b);
   box.scrollTop = box.scrollHeight;
 }
@@ -1217,27 +1319,36 @@ function sendChat() {
   if (!val) return;
   input.value = '';
   document.getElementById('suggestedReplies').innerHTML = '';
-
   addBubble('me', val);
-
   const step = currentScenarioSteps[chatStepIndex];
-  const isCorrect = val.toLowerCase().includes(step.expect.toLowerCase().split(' ')[0]) ||
-                    step.suggestions.some(s => val.toLowerCase().includes(s.toLowerCase().split(' ')[0]));
-
+  const isCorrect = step.suggestions.some(s => val.toLowerCase().includes(s.toLowerCase().substring(0,6)));
   setTimeout(() => {
     const fb = document.createElement('div');
     fb.className = 'bubble feedback' + (isCorrect ? '' : ' wrong');
     if (isCorrect) {
-      fb.innerHTML = `✓ Great! The key phrase here was: <strong>${step.expect}</strong> (${step.expectEng})`;
+      const t = document.createElement('div');
+      t.textContent = '✓ Great! Key phrase: ';
+      const b = document.createElement('strong');
+      b.textContent = step.expect;
+      t.appendChild(b);
+      fb.appendChild(t);
       addXP(diff === 'easy' ? 8 : diff === 'medium' ? 15 : 25);
       updateStreak(true);
     } else {
-      fb.innerHTML = `Try: <strong>${step.expect}</strong> — "${step.expectEng}"<br><span style="font-size:12px;color:var(--muted);">Hint: ${step.hint}</span>`;
+      const t = document.createElement('div');
+      t.textContent = 'Try: ';
+      const b = document.createElement('strong');
+      b.textContent = step.expect;
+      t.appendChild(b);
+      const hint = document.createElement('div');
+      hint.style.cssText = 'font-size:12px;opacity:.6;margin-top:4px;';
+      hint.textContent = '💡 ' + step.hint;
+      fb.appendChild(t);
+      fb.appendChild(hint);
       updateStreak(false);
     }
     document.getElementById('chatBox').appendChild(fb);
     document.getElementById('chatBox').scrollTop = 99999;
-
     chatStepIndex++;
     if (chatStepIndex < currentScenarioSteps.length) {
       setTimeout(() => {
@@ -1256,19 +1367,21 @@ function showScenarioSummary() {
   document.getElementById('scenario-chat-view').style.display = 'none';
   const el = document.getElementById('scenario-summary-view');
   el.style.display = 'block';
-  el.innerHTML = `
-    <div class="summary-box">
-      <div class="summary-score">🎉</div>
-      <div style="font-family:'Playfair Display',serif;font-size:24px;margin-top:12px;">Scenario complete!</div>
-      <div style="font-size:14px;color:var(--muted);margin-top:8px;">You finished the ${selectedScenarioObj.name} conversation</div>
-      <div class="summary-stats">
-        <div class="sum-stat"><div class="sum-num">${streak}</div><div class="sum-lbl">Streak</div></div>
-        <div class="sum-stat"><div class="sum-num">${xp}</div><div class="sum-lbl">Total XP</div></div>
-      </div>
-      <div class="btn-row" style="justify-content:center;">
-        <button class="btn btn-primary" onclick="backToScenarioPicker()">Try another scenario →</button>
-      </div>
+  el.innerHTML = '';
+  const box = document.createElement('div');
+  box.className = 'summary-box';
+  box.innerHTML = `
+    <div class="summary-score">🎉</div>
+    <div style="font-family:'Playfair Display',serif;font-size:22px;margin-top:12px;">Conversation complete!</div>
+    <div style="font-size:14px;color:var(--muted);margin-top:8px;">${selectedScenarioObj.name} · ${diff} difficulty</div>
+    <div class="summary-stats">
+      <div class="sum-stat"><div class="sum-num">${streak}</div><div class="sum-lbl">Streak</div></div>
+      <div class="sum-stat"><div class="sum-num">${xp}</div><div class="sum-lbl">Total XP</div></div>
+    </div>
+    <div class="btn-row" style="justify-content:center;gap:12px;">
+      <button class="btn btn-primary" onclick="backToScenarioPicker()">Try another →</button>
     </div>`;
+  el.appendChild(box);
 }
 
 function backToScenarioPicker() {
@@ -1277,38 +1390,56 @@ function backToScenarioPicker() {
   document.getElementById('scenario-summary-view').style.display = 'none';
 }
 
-// ════════════════════════════════
+// ════════════════════
 // ── SENTENCE BUILDER ──
-// ════════════════════════════════
+// ════════════════════
 const SB_EXERCISES = {
-  easy: [
-    {prompt:"Arrange: I want to eat rice", answer:"Tôi muốn ăn cơm", words:["Tôi","muốn","ăn","cơm","đi","uống"], cat:"Daily Life"},
-    {prompt:"Arrange: How much is this?", answer:"Cái này bao nhiêu tiền?", words:["Cái","này","bao","nhiêu","tiền?","ăn","ngon"], cat:"Shopping"},
-    {prompt:"Arrange: Give me one portion more", answer:"Cho tôi một phần nữa", words:["Cho","tôi","một","phần","nữa","cơm","rau"], cat:"Food"},
-    {prompt:"Arrange: Can you stop here?", answer:"Dừng đây được không?", words:["Dừng","đây","được","không?","đi","nhanh"], cat:"Transport"},
-    {prompt:"Arrange: Today's lunch", answer:"Bữa trưa hôm nay", words:["Bữa","trưa","hôm","nay","tối","sáng"], cat:"Grammar"},
-    {prompt:"Arrange: I like to train weights", answer:"Tôi thích tập tạ", words:["Tôi","thích","tập","tạ","ăn","cơm"], cat:"Fitness"},
-    {prompt:"Arrange: Is it delicious?", answer:"Có ngon không?", words:["Có","ngon","không?","đắt","mắc"], cat:"Food"},
-    {prompt:"Arrange: I don't eat beef", answer:"Tôi không ăn thịt bò", words:["Tôi","không","ăn","thịt","bò","gà","rau"], cat:"Food"},
-  ],
-  medium: [
-    {prompt:"Arrange: Too spicy, can you make it less spicy?", answer:"Cay quá, bớt cay được không?", words:["Cay","quá,","bớt","cay","được","không?","ngon","mắc"], cat:"Food"},
-    {prompt:"Arrange: Can I pay by card?", answer:"Thanh toán bằng thẻ được không?", words:["Thanh","toán","bằng","thẻ","được","không?","tiền","mặt"], cat:"Payments"},
-    {prompt:"Arrange: How long have you been training?", answer:"Bạn tập bao lâu rồi?", words:["Bạn","tập","bao","lâu","rồi?","nhiêu","ngày"], cat:"Fitness"},
-    {prompt:"Arrange: I will eat duck congee today", answer:"Hôm nay tôi sẽ ăn cháo vịt", words:["Hôm","nay","tôi","sẽ","ăn","cháo","vịt","cơm","gạo"], cat:"Grammar"},
-    {prompt:"Arrange: Give me half a kilo of fresh fish", answer:"Cho tôi nửa ký cá tươi", words:["Cho","tôi","nửa","ký","cá","tươi","rau","gạo"], cat:"Market"},
-    {prompt:"Arrange: Let me think about it more", answer:"Để tôi suy nghĩ thêm", words:["Để","tôi","suy","nghĩ","thêm","biết","hiểu"], cat:"Business"},
-    {prompt:"Arrange: The traffic is terrible today", answer:"Hôm nay kẹt xe quá", words:["Hôm","nay","kẹt","xe","quá","đi","nhanh"], cat:"Transport"},
-    {prompt:"Arrange: Go straight then turn right", answer:"Đi thẳng rồi quẹo phải", words:["Đi","thẳng","rồi","quẹo","phải","trái","nhanh"], cat:"Transport"},
-  ],
-  hard: [
-    {prompt:"Arrange: Can we speak privately?", answer:"Mình có thể nói chuyện riêng không?", words:["Mình","có","thể","nói","chuyện","riêng","không?","cùng","nhau"], cat:"Business"},
-    {prompt:"Arrange: Duck congee, no coriander please", answer:"Cháo vịt, không bỏ ngò", words:["Cháo","vịt,","không","bỏ","ngò","thêm","rau"], cat:"Food"},
-    {prompt:"Arrange: Can you lower the price?", answer:"Anh có thể giảm giá không?", words:["Anh","có","thể","giảm","giá","không?","tăng","nhiều"], cat:"Business"},
-    {prompt:"Arrange: I want to sign up to train", answer:"Tôi muốn đăng ký tập", words:["Tôi","muốn","đăng","ký","tập","học","xem"], cat:"Fitness"},
-    {prompt:"Arrange: When do we sign the contract?", answer:"Bao giờ ký hợp đồng?", words:["Bao","giờ","ký","hợp","đồng?","nhiêu","tiền"], cat:"Business"},
-    {prompt:"Arrange: Drive faster, I'm already late", answer:"Chạy nhanh lên, tôi trễ rồi", words:["Chạy","nhanh","lên,","tôi","trễ","rồi","đi","chậm"], cat:"Transport"},
-  ],
+  'All': {
+    easy:[
+      {prompt:"Arrange: I want to eat rice", answer:"Tôi muốn ăn cơm", words:["Tôi","muốn","ăn","cơm","đi","uống"], cat:"Daily Life"},
+      {prompt:"Arrange: How much is this?", answer:"Cái này bao nhiêu tiền?", words:["Cái","này","bao","nhiêu","tiền?","ăn","ngon"], cat:"Shopping"},
+      {prompt:"Arrange: Give me one portion more", answer:"Cho tôi một phần nữa", words:["Cho","tôi","một","phần","nữa","cơm","rau"], cat:"Food"},
+      {prompt:"Arrange: I don't eat beef", answer:"Tôi không ăn thịt bò", words:["Tôi","không","ăn","thịt","bò","gà","rau"], cat:"Food"},
+      {prompt:"Arrange: Is it spicy?", answer:"Có cay không?", words:["Có","cay","không?","ngon","mắc"], cat:"Food"},
+      {prompt:"Arrange: Today's lunch", answer:"Bữa trưa hôm nay", words:["Bữa","trưa","hôm","nay","tối","sáng"], cat:"Grammar"},
+      {prompt:"Arrange: I like weight training", answer:"Tôi thích tập tạ", words:["Tôi","thích","tập","tạ","ăn","cơm"], cat:"Fitness"},
+      {prompt:"Arrange: Can you stop here?", answer:"Dừng đây được không?", words:["Dừng","đây","được","không?","đi","nhanh"], cat:"Transport"},
+      {prompt:"Arrange: Give me a glass of water", answer:"Cho tôi một ly nước", words:["Cho","tôi","một","ly","nước","cơm","rau"], cat:"Daily Life"},
+      {prompt:"Arrange: Where are you going?", answer:"Bạn đi đâu?", words:["Bạn","đi","đâu?","làm","gì"], cat:"Grammar"},
+    ],
+    medium:[
+      {prompt:"Arrange: Too spicy, can you make it less spicy?", answer:"Cay quá, bớt cay được không?", words:["Cay","quá,","bớt","cay","được","không?","ngon","mắc"], cat:"Food"},
+      {prompt:"Arrange: Can I pay by card?", answer:"Thanh toán bằng thẻ được không?", words:["Thanh","toán","bằng","thẻ","được","không?","tiền","mặt"], cat:"Payments"},
+      {prompt:"Arrange: How long have you been training?", answer:"Bạn tập bao lâu rồi?", words:["Bạn","tập","bao","lâu","rồi?","nhiêu","ngày"], cat:"Fitness"},
+      {prompt:"Arrange: I will eat duck congee today", answer:"Hôm nay tôi sẽ ăn cháo vịt", words:["Hôm","nay","tôi","sẽ","ăn","cháo","vịt","cơm","gạo"], cat:"Grammar"},
+      {prompt:"Arrange: Give me half a kilo of fresh fish", answer:"Cho tôi nửa ký cá tươi", words:["Cho","tôi","nửa","ký","cá","tươi","rau","gạo"], cat:"Market"},
+      {prompt:"Arrange: Let me think about it more", answer:"Để tôi suy nghĩ thêm", words:["Để","tôi","suy","nghĩ","thêm","biết","hiểu"], cat:"Business"},
+      {prompt:"Arrange: The traffic is terrible today", answer:"Hôm nay kẹt xe quá", words:["Hôm","nay","kẹt","xe","quá","đi","nhanh"], cat:"Transport"},
+      {prompt:"Arrange: Go straight then turn right", answer:"Đi thẳng rồi quẹo phải", words:["Đi","thẳng","rồi","quẹo","phải","trái","nhanh"], cat:"Transport"},
+      {prompt:"Arrange: Iced milk coffee, less sugar", answer:"Cà phê sữa đá, ít đường", words:["Cà","phê","sữa","đá,","ít","đường","nhiều","nóng"], cat:"Café"},
+      {prompt:"Arrange: Can I have the wifi password?", answer:"Cho tôi mật khẩu wifi được không?", words:["Cho","tôi","mật","khẩu","wifi","được","không?","tên"], cat:"Café"},
+    ],
+    hard:[
+      {prompt:"Arrange: Can we speak privately?", answer:"Mình có thể nói chuyện riêng không?", words:["Mình","có","thể","nói","chuyện","riêng","không?","cùng","nhau"], cat:"Business"},
+      {prompt:"Arrange: Duck congee, no coriander please", answer:"Cháo vịt, không bỏ ngò", words:["Cháo","vịt,","không","bỏ","ngò","thêm","rau"], cat:"Food"},
+      {prompt:"Arrange: Can you lower the price?", answer:"Anh có thể giảm giá không?", words:["Anh","có","thể","giảm","giá","không?","tăng","nhiều"], cat:"Business"},
+      {prompt:"Arrange: I want to sign up to train", answer:"Tôi muốn đăng ký tập", words:["Tôi","muốn","đăng","ký","tập","học","xem"], cat:"Fitness"},
+      {prompt:"Arrange: Drive faster, I'm already late", answer:"Chạy nhanh lên, tôi trễ rồi", words:["Chạy","nhanh","lên,","tôi","trễ","rồi","đi","chậm"], cat:"Transport"},
+      {prompt:"Arrange: Short on the sides, longer on top", answer:"Hai bên ngắn, trên để dài hơn", words:["Hai","bên","ngắn,","trên","để","dài","hơn","cắt","đều"], cat:"Barbershop"},
+      {prompt:"Arrange: I have stomach pain since yesterday", answer:"Tôi bị đau bụng từ hôm qua", words:["Tôi","bị","đau","bụng","từ","hôm","qua","sáng","nay"], cat:"Pharmacy"},
+      {prompt:"Arrange: Maybe two hours", answer:"Có lẽ hai tiếng", words:["Có","lẽ","hai","tiếng","ba","một","giờ"], cat:"Café"},
+    ],
+  },
+};
+// Topic-filtered SB: map topic to exercise subset
+const SB_TOPIC_MAP = {
+  'Food & Dining': ['easy','medium','hard'].flatMap(d => (SB_EXERCISES['All'][d]||[]).filter(e=>['Food','Food & Dining'].includes(e.cat))),
+  'Transport': ['easy','medium','hard'].flatMap(d => (SB_EXERCISES['All'][d]||[]).filter(e=>e.cat==='Transport')),
+  'Market & Shopping': ['easy','medium','hard'].flatMap(d => (SB_EXERCISES['All'][d]||[]).filter(e=>['Market','Shopping'].includes(e.cat))),
+  'Gym & Business': ['easy','medium','hard'].flatMap(d => (SB_EXERCISES['All'][d]||[]).filter(e=>['Fitness','Business'].includes(e.cat))),
+  'Café': ['easy','medium','hard'].flatMap(d => (SB_EXERCISES['All'][d]||[]).filter(e=>e.cat==='Café')),
+  'Pharmacy': ['easy','medium','hard'].flatMap(d => (SB_EXERCISES['All'][d]||[]).filter(e=>e.cat==='Pharmacy')),
+  'Barbershop': ['easy','medium','hard'].flatMap(d => (SB_EXERCISES['All'][d]||[]).filter(e=>e.cat==='Barbershop')),
 };
 
 let currentSBExercises = [];
@@ -1317,7 +1448,13 @@ let sbPlaced = [];
 let sbShuffled = [];
 
 function loadSentence() {
-  currentSBExercises = [...(SB_EXERCISES[diff] || SB_EXERCISES.easy)].sort(() => Math.random() - 0.5);
+  let pool;
+  if (activeTopic !== 'All' && SB_TOPIC_MAP[activeTopic]?.length) {
+    pool = [...SB_TOPIC_MAP[activeTopic]];
+  } else {
+    pool = [...(SB_EXERCISES['All'][diff] || SB_EXERCISES['All'].easy)];
+  }
+  currentSBExercises = pool.sort(() => Math.random() - 0.5);
   sbCurrentIdx = 0;
   renderSentence();
 }
@@ -1326,32 +1463,46 @@ function renderSentence() {
   const ex = currentSBExercises[sbCurrentIdx % currentSBExercises.length];
   sbPlaced = [];
   sbShuffled = [...ex.words].sort(() => Math.random() - 0.5);
-  document.getElementById('sbCatLabel').textContent = ex.cat;
-  document.getElementById('sbPrompt').textContent = ex.prompt;
-  document.getElementById('sbEng').textContent = 'Target: ' + ex.answer;
-  document.getElementById('sbCounter').textContent = `${(sbCurrentIdx % currentSBExercises.length) + 1} / ${currentSBExercises.length}`;
-  document.getElementById('sbFeedback').style.display = 'none';
-  document.getElementById('sbCheckBtn').style.display = '';
+  const catEl = document.getElementById('sbCatLabel');
+  const promptEl = document.getElementById('sbPrompt');
+  const engEl = document.getElementById('sbEng');
+  const counterEl = document.getElementById('sbCounter');
+  const fbEl = document.getElementById('sbFeedback');
+  const checkBtn = document.getElementById('sbCheckBtn');
+  if (catEl) catEl.textContent = ex.cat;
+  if (promptEl) promptEl.textContent = ex.prompt;
+  if (engEl) engEl.textContent = ''; // NO answer hint shown
+  if (counterEl) counterEl.textContent = `${(sbCurrentIdx % currentSBExercises.length) + 1} / ${currentSBExercises.length}`;
+  if (fbEl) fbEl.style.display = 'none';
+  if (checkBtn) checkBtn.style.display = '';
   renderWordBank();
   renderAnswerSlots();
 }
 
 function renderWordBank() {
   const wb = document.getElementById('wordBank');
+  if (!wb) return;
   wb.innerHTML = '';
   sbShuffled.forEach((w, i) => {
     const t = document.createElement('div');
     t.className = 'word-tile' + (sbPlaced.includes(i) ? ' used' : '');
     t.textContent = w;
-    t.onclick = () => placeWord(i, w);
+    t.onclick = () => placeWord(i);
     wb.appendChild(t);
   });
 }
 
 function renderAnswerSlots() {
   const el = document.getElementById('answerSlots');
+  if (!el) return;
   el.className = 'answer-slots';
-  el.innerHTML = sbPlaced.length === 0 ? '<span style="color:var(--muted);font-size:13px;">Tap words below to build the sentence</span>' : '';
+  el.innerHTML = '';
+  if (sbPlaced.length === 0) {
+    const hint = document.createElement('span');
+    hint.style.cssText = 'color:var(--muted);font-size:13px;';
+    hint.textContent = 'Tap words below to build the sentence';
+    el.appendChild(hint);
+  }
   sbPlaced.forEach((idx, pos) => {
     const t = document.createElement('div');
     t.className = 'placed-tile';
@@ -1361,7 +1512,7 @@ function renderAnswerSlots() {
   });
 }
 
-function placeWord(i, w) {
+function placeWord(i) {
   if (sbPlaced.includes(i)) return;
   sbPlaced.push(i);
   renderWordBank();
@@ -1374,26 +1525,33 @@ function removeTile(pos) {
   renderAnswerSlots();
 }
 
-function removeLastWord() {}
-
 function checkSentence() {
   const ex = currentSBExercises[sbCurrentIdx % currentSBExercises.length];
   const built = sbPlaced.map(i => sbShuffled[i]).join(' ');
   const correct = built.trim().toLowerCase() === ex.answer.toLowerCase();
   const fb = document.getElementById('sbFeedback');
   const slots = document.getElementById('answerSlots');
+  if (!fb || !slots) return;
   fb.style.display = 'block';
   fb.className = 'sb-feedback ' + (correct ? 'correct' : 'incorrect');
   slots.className = 'answer-slots ' + (correct ? 'correct' : 'incorrect');
+  fb.innerHTML = '';
   if (correct) {
-    fb.innerHTML = '✓ Correct! <strong>' + ex.answer + '</strong>';
+    fb.textContent = '✓ Correct! ';
+    const b = document.createElement('strong');
+    b.textContent = ex.answer;
+    fb.appendChild(b);
     addXP(diff === 'easy' ? 10 : diff === 'medium' ? 18 : 28);
     updateStreak(true);
   } else {
-    fb.innerHTML = '✗ Not quite. Correct answer: <strong>' + ex.answer + '</strong>';
+    fb.textContent = '✗ Correct order: ';
+    const b = document.createElement('strong');
+    b.textContent = ex.answer;
+    fb.appendChild(b);
     updateStreak(false);
   }
-  document.getElementById('sbCheckBtn').style.display = 'none';
+  const checkBtn = document.getElementById('sbCheckBtn');
+  if (checkBtn) checkBtn.style.display = 'none';
 }
 
 function nextSentence() {
@@ -1401,49 +1559,49 @@ function nextSentence() {
   renderSentence();
 }
 
-// ════════════════════════════════
+// ════════════════════
 // ── GAP FILL ──
-// ════════════════════════════════
-// Each line: text has ___ per blank, answers[] has one answer per blank
+// Every blank has its answer guaranteed in the hints array
+// ════════════════════
 const GF_EXERCISES = [
   {
     topic:"Food & Market", scenarioTitle:"At the wet market", scenarioDesc:"Buying fish and vegetables",
-    hints:["Còn","còn","Bao nhiêu","Nửa ký","hết rồi","tươi","Cho tôi"],
+    hints:["Còn","còn","Bao nhiêu","Nửa ký","tươi","Cho tôi","hết rồi"],
     lines:[
       {speaker:"You",    text:"Chị ơi! ___ cá không?",          answers:["Còn"],       eng:"Hey! Do you still have fish?"},
-      {speaker:"Vendor", text:"Dạ ___! Cá tươi lắm.",            answers:["còn"],       eng:"Yes, still have! Very fresh fish."},
-      {speaker:"You",    text:"___ một ký cá chiên.",             answers:["Cho tôi"],   eng:"Give me one kilo of fried fish."},
+      {speaker:"Vendor", text:"Dạ ___! Cá tươi lắm.",            answers:["còn"],       eng:"Yes still have! Very fresh."},
+      {speaker:"You",    text:"___ một ký cá ___.",               answers:["Cho tôi","tươi"], eng:"Give me one kilo of fresh fish."},
       {speaker:"Vendor", text:"___ tiền một ký?",                 answers:["Bao nhiêu"], eng:"How much per kilo?"},
-      {speaker:"You",    text:"___ thôi, không cần nhiều.",       answers:["Nửa ký"],    eng:"Just half a kilo, don't need much."},
+      {speaker:"You",    text:"___ thôi, không cần nhiều.",       answers:["Nửa ký"],    eng:"Just half a kilo."},
     ]
   },
   {
-    topic:"Grammar: Future Tense", scenarioTitle:"Planning tomorrow", scenarioDesc:"Using sẽ for future actions",
-    hints:["sẽ","hay","và","có lẽ","đi","hôm nay"],
+    topic:"Grammar: Future & Connectors", scenarioTitle:"Planning the day", scenarioDesc:"Using sẽ, và, hay, có lẽ",
+    hints:["sẽ","và","hay","Có lẽ","Hôm nay","đi"],
     lines:[
       {speaker:"Friend", text:"___ bạn làm gì?",                  answers:["Hôm nay"],  eng:"What are you doing today?"},
-      {speaker:"You",    text:"Tôi ___ đi chợ mua rau ___ cá.",   answers:["sẽ","và"],  eng:"I will go to the market to buy vegetables and fish."},
-      {speaker:"Friend", text:"Bạn muốn ăn cơm ___ bánh mì?",     answers:["hay"],      eng:"Do you want to eat rice or bread?"},
+      {speaker:"You",    text:"Tôi ___ đi chợ mua rau ___ cá.",   answers:["sẽ","và"],  eng:"I will go to the market to buy veg and fish."},
+      {speaker:"Friend", text:"Bạn muốn ăn cơm ___ bánh mì?",     answers:["hay"],      eng:"Rice or bread?"},
       {speaker:"You",    text:"Tôi muốn cơm ___ rau.",             answers:["và"],       eng:"I want rice and vegetables."},
       {speaker:"Friend", text:"___ tôi sẽ cùng đi.",              answers:["Có lẽ"],    eng:"Maybe I'll come along."},
     ]
   },
   {
-    topic:"Yes/No Questions", scenarioTitle:"At the restaurant", scenarioDesc:"Using có...không structure",
-    hints:["Có","Có","Còn","không","không","được"],
+    topic:"Yes/No Questions", scenarioTitle:"At the restaurant", scenarioDesc:"Using có...không and còn...không",
+    hints:["Có","không","Còn","có","được","ngon"],
     lines:[
       {speaker:"You",    text:"___ cháo vịt ___?",                answers:["Có","không"],  eng:"Do you have duck congee?"},
-      {speaker:"Staff",  text:"Dạ ___! Anh dùng không?",          answers:["Còn"],          eng:"Yes, still have! Would you like some?"},
+      {speaker:"Staff",  text:"Dạ ___! Anh dùng không?",          answers:["Còn"],          eng:"Yes still have! Would you like some?"},
       {speaker:"You",    text:"___ cay ___ ?",                    answers:["Có","không"],   eng:"Is it spicy?"},
-      {speaker:"Staff",  text:"Không cay lắm, anh yên tâm.",      answers:[],               eng:"Not very spicy, don't worry."},
-      {speaker:"You",    text:"Bớt cay ___ không?",               answers:["được"],         eng:"Can it be made less spicy?"},
+      {speaker:"You",    text:"Bớt cay ___ không?",               answers:["được"],         eng:"Can it be less spicy?"},
+      {speaker:"Staff",  text:"Dạ ___, anh yên tâm.",             answers:["có"],           eng:"Yes of course, don't worry."},
     ]
   },
   {
-    topic:"Transport", scenarioTitle:"In a Grab", scenarioDesc:"Giving directions to the driver",
+    topic:"Transport", scenarioTitle:"In a Grab", scenarioDesc:"Giving directions",
     hints:["kẹt xe","kẹt xe","đi","thẳng","phải","Dừng","đây"],
     lines:[
-      {speaker:"Driver", text:"Hôm nay ___ quá!",                 answers:["kẹt xe"],       eng:"Today the traffic is terrible!"},
+      {speaker:"Driver", text:"Hôm nay ___ quá!",                 answers:["kẹt xe"],       eng:"Traffic is terrible today!"},
       {speaker:"You",    text:"Vâng, ___ quá.",                   answers:["kẹt xe"],       eng:"Yes, so much traffic."},
       {speaker:"Driver", text:"Mình ___ đường này được không?",   answers:["đi"],           eng:"Can we take this road?"},
       {speaker:"You",    text:"Đi ___ rồi quẹo ___.",             answers:["thẳng","phải"], eng:"Go straight then turn right."},
@@ -1451,14 +1609,36 @@ const GF_EXERCISES = [
     ]
   },
   {
-    topic:"Fitness & Gym", scenarioTitle:"Signing up at a gym", scenarioDesc:"Business conversation with gym staff",
+    topic:"Fitness & Gym", scenarioTitle:"Signing up", scenarioDesc:"Gym membership conversation",
     hints:["đăng ký","tập","tập","bao lâu","thể hình","giảm giá","được"],
     lines:[
       {speaker:"You",    text:"Tôi muốn ___ ___.",                answers:["đăng ký","tập"], eng:"I want to sign up to train."},
       {speaker:"Staff",  text:"Anh ___ ___ rồi?",                 answers:["tập","bao lâu"], eng:"How long have you been training?"},
       {speaker:"You",    text:"Ba năm. Phòng ___ ở đây đẹp lắm.", answers:["thể hình"],      eng:"Three years. The gym here is very nice."},
       {speaker:"You",    text:"Anh có thể ___ không?",            answers:["giảm giá"],      eng:"Can you lower the price?"},
-      {speaker:"Staff",  text:"Dạ ___ anh, mười phần trăm.",      answers:["được"],          eng:"Yes we can, ten percent off."},
+      {speaker:"Staff",  text:"Dạ ___ anh, mười phần trăm.",      answers:["được"],          eng:"Yes, ten percent off."},
+    ]
+  },
+  {
+    topic:"Café", scenarioTitle:"At a café", scenarioDesc:"Ordering drinks and asking for wifi",
+    hints:["cà phê sữa đá","ít đường","ở đây","mật khẩu wifi","Có lẽ","hai tiếng"],
+    lines:[
+      {speaker:"You",    text:"Cho tôi ___, ___.",               answers:["cà phê sữa đá","ít đường"], eng:"Give me iced milk coffee, less sugar."},
+      {speaker:"Staff",  text:"Uống ___ hay mang về?",            answers:["ở đây"],     eng:"Dine in or takeaway?"},
+      {speaker:"You",    text:"Ở đây. Cho tôi ___ được không?",  answers:["mật khẩu wifi"], eng:"Here. Can I have the wifi password?"},
+      {speaker:"Staff",  text:"Anh làm việc ở đây lâu không?",  answers:[],            eng:"Are you working here long?"},
+      {speaker:"You",    text:"___ ___.",                         answers:["Có lẽ","hai tiếng"], eng:"Maybe two hours."},
+    ]
+  },
+  {
+    topic:"Pharmacy", scenarioTitle:"At the pharmacy", scenarioDesc:"Describing symptoms",
+    hints:["đau đầu","Từ sáng nay","không","chỉ","Uống mấy viên","Cảm ơn"],
+    lines:[
+      {speaker:"You",    text:"Tôi bị ___.",                      answers:["đau đầu"],       eng:"I have a headache."},
+      {speaker:"Staff",  text:"Bị lâu chưa?",                    answers:[],                eng:"How long have you had it?"},
+      {speaker:"You",    text:"___.",                             answers:["Từ sáng nay"],   eng:"Since this morning."},
+      {speaker:"Staff",  text:"Có bị sốt không?",                answers:[],                eng:"Do you have a fever?"},
+      {speaker:"You",    text:"___, ___ đau đầu thôi.",          answers:["không","chỉ"],   eng:"No, just a headache."},
     ]
   },
 ];
@@ -1469,7 +1649,14 @@ let gfSelectedChip = null;
 let gfDraggingChip = null;
 
 function loadGapFill() {
-  gfExercises = [...GF_EXERCISES].sort(() => Math.random() - 0.5);
+  let pool;
+  if (activeTopic !== 'All') {
+    pool = GF_EXERCISES.filter(e => e.topic.toLowerCase().includes(activeTopic.toLowerCase().split(' ')[0].toLowerCase()));
+    if (!pool.length) pool = GF_EXERCISES;
+  } else {
+    pool = GF_EXERCISES;
+  }
+  gfExercises = [...pool].sort(() => Math.random() - 0.5);
   gfCurrentIdx = 0;
   renderGapFill();
 }
@@ -1478,13 +1665,17 @@ function renderGapFill() {
   gfSelectedChip = null;
   gfDraggingChip = null;
   const ex = gfExercises[gfCurrentIdx % gfExercises.length];
-  document.getElementById('gfTopicLabel').textContent = ex.topic;
-  document.getElementById('gfScenarioTitle').textContent = ex.scenarioTitle;
-  document.getElementById('gfScenarioDesc').textContent = ex.scenarioDesc;
-  document.getElementById('gfCounter').textContent = `${(gfCurrentIdx % gfExercises.length) + 1} / ${gfExercises.length}`;
+  const topicEl = document.getElementById('gfTopicLabel');
+  const titleEl = document.getElementById('gfScenarioTitle');
+  const descEl = document.getElementById('gfScenarioDesc');
+  const counterEl = document.getElementById('gfCounter');
+  if (topicEl) topicEl.textContent = ex.topic;
+  if (titleEl) titleEl.textContent = ex.scenarioTitle;
+  if (descEl) descEl.textContent = ex.scenarioDesc;
+  if (counterEl) counterEl.textContent = `${(gfCurrentIdx % gfExercises.length) + 1} / ${gfExercises.length}`;
 
-  // Build chips — one per entry in hints[] (duplicates are explicit in the array)
   const hintsEl = document.getElementById('gfHints');
+  if (!hintsEl) return;
   hintsEl.innerHTML = '';
   ex.hints.forEach((word, wi) => {
     const cid = `chip-${wi}`;
@@ -1494,38 +1685,20 @@ function renderGapFill() {
     chip.dataset.word = word;
     chip.dataset.cid = cid;
     chip.draggable = true;
-
     chip.addEventListener('click', () => {
       if (chip.classList.contains('used')) return;
-      if (gfSelectedChip === chip) {
-        chip.classList.remove('selected');
-        gfSelectedChip = null;
-      } else {
-        if (gfSelectedChip) gfSelectedChip.classList.remove('selected');
-        gfSelectedChip = chip;
-        chip.classList.add('selected');
-      }
+      if (gfSelectedChip === chip) { chip.classList.remove('selected'); gfSelectedChip = null; }
+      else { if (gfSelectedChip) gfSelectedChip.classList.remove('selected'); gfSelectedChip = chip; chip.classList.add('selected'); }
     });
-
-    chip.addEventListener('dragstart', e => {
-      gfDraggingChip = chip;
-      chip.classList.add('dragging');
-      e.dataTransfer.setData('text/plain', cid);
-      e.dataTransfer.effectAllowed = 'move';
-    });
-    chip.addEventListener('dragend', () => {
-      chip.classList.remove('dragging');
-      gfDraggingChip = null;
-    });
-
+    chip.addEventListener('dragstart', e => { gfDraggingChip = chip; chip.classList.add('dragging'); e.dataTransfer.setData('text/plain', cid); });
+    chip.addEventListener('dragend', () => { chip.classList.remove('dragging'); gfDraggingChip = null; });
     hintsEl.appendChild(chip);
   });
 
-  // Build dialogue with drop zones
   const dlg = document.getElementById('gfDialogue');
+  if (!dlg) return;
   dlg.innerHTML = '';
   let blankId = 0;
-
   ex.lines.forEach((line, li) => {
     const row = document.createElement('div');
     row.className = 'gf-line';
@@ -1533,36 +1706,29 @@ function renderGapFill() {
     textEl.className = 'gf-text';
     const parts = line.text.split('___');
     let blankCount = 0;
-
     parts.forEach((part, pi) => {
       textEl.appendChild(document.createTextNode(part));
       if (pi < parts.length - 1) {
-        const bid = `blank-${blankId++}`;
         const ansIdx = blankCount++;
         const drop = document.createElement('span');
         drop.className = 'gf-drop';
-        drop.dataset.bid = bid;
+        drop.dataset.bid = `blank-${blankId++}`;
         drop.dataset.li = li;
         drop.dataset.ai = ansIdx;
         drop.dataset.empty = '1';
         drop.innerHTML = '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;';
-
         drop.addEventListener('click', () => {
           if (drop.dataset.checked) return;
           if (drop.dataset.empty === '0') {
-            const placedCid = drop.dataset.cid;
-            const chip = document.querySelector(`.hint-chip[data-cid="${placedCid}"]`);
-            if (chip) chip.classList.remove('used', 'selected');
+            const chip = document.querySelector(`.hint-chip[data-cid="${drop.dataset.cid}"]`);
+            if (chip) chip.classList.remove('used','selected');
             clearDrop(drop);
-            if (gfSelectedChip) gfSelectedChip.classList.remove('selected');
-            gfSelectedChip = null;
           } else if (gfSelectedChip) {
-            const prevDrop = document.querySelector(`.gf-drop[data-cid="${gfSelectedChip.dataset.cid}"]`);
-            if (prevDrop) clearDrop(prevDrop);
+            const prev = document.querySelector(`.gf-drop[data-cid="${gfSelectedChip.dataset.cid}"]`);
+            if (prev) clearDrop(prev);
             fillDrop(drop, gfSelectedChip);
           }
         });
-
         drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('drag-over'); });
         drop.addEventListener('dragleave', () => drop.classList.remove('drag-over'));
         drop.addEventListener('drop', e => {
@@ -1572,19 +1738,17 @@ function renderGapFill() {
           const cid = e.dataTransfer.getData('text/plain');
           const chip = document.querySelector(`.hint-chip[data-cid="${cid}"]`) || gfDraggingChip;
           if (!chip) return;
-          const prevDrop = document.querySelector(`.gf-drop[data-cid="${chip.dataset.cid}"]`);
-          if (prevDrop && prevDrop !== drop) clearDrop(prevDrop);
+          const prev = document.querySelector(`.gf-drop[data-cid="${chip.dataset.cid}"]`);
+          if (prev && prev !== drop) clearDrop(prev);
           if (drop.dataset.empty === '0') {
-            const oldChip = document.querySelector(`.hint-chip[data-cid="${drop.dataset.cid}"]`);
-            if (oldChip) oldChip.classList.remove('used', 'selected');
+            const old = document.querySelector(`.hint-chip[data-cid="${drop.dataset.cid}"]`);
+            if (old) old.classList.remove('used','selected');
           }
           fillDrop(drop, chip);
         });
-
         textEl.appendChild(drop);
       }
     });
-
     const trans = document.createElement('span');
     trans.className = 'gf-translate';
     trans.textContent = line.eng;
@@ -1600,7 +1764,14 @@ function fillDrop(drop, chip) {
   drop.dataset.cid = chip.dataset.cid;
   drop.dataset.value = chip.dataset.word;
   drop.classList.add('filled');
-  drop.innerHTML = chip.dataset.word + ' <span class="clear-x">\u2715</span>';
+  drop.innerHTML = '';
+  const wordSpan = document.createElement('span');
+  wordSpan.textContent = chip.dataset.word;
+  const x = document.createElement('span');
+  x.className = 'clear-x';
+  x.textContent = ' ✕';
+  drop.appendChild(wordSpan);
+  drop.appendChild(x);
   chip.classList.add('used');
   chip.classList.remove('selected');
   if (gfSelectedChip === chip) gfSelectedChip = null;
@@ -1610,14 +1781,13 @@ function clearDrop(drop) {
   drop.dataset.empty = '1';
   delete drop.dataset.cid;
   delete drop.dataset.value;
-  drop.classList.remove('filled', 'correct-ans', 'wrong-ans', 'selected-blank');
+  drop.classList.remove('filled','correct-ans','wrong-ans','selected-blank');
   drop.innerHTML = '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;';
 }
 
 function checkGapFill() {
   const ex = gfExercises[gfCurrentIdx % gfExercises.length];
   let correct = 0, total = 0;
-
   ex.lines.forEach((line, li) => {
     if (!line.answers || line.answers.length === 0) return;
     const drops = document.querySelectorAll(`.gf-drop[data-li="${li}"]`);
@@ -1630,24 +1800,34 @@ function checkGapFill() {
       if (val === correctAns) {
         drop.classList.remove('filled');
         drop.classList.add('correct-ans');
-        drop.innerHTML = line.answers[di];
+        const w = document.createElement('span');
+        w.textContent = line.answers[di];
+        drop.innerHTML = '';
+        drop.appendChild(w);
         correct++;
       } else {
         drop.classList.remove('filled');
         drop.classList.add('wrong-ans');
         drop.style.minWidth = '110px';
-        drop.innerHTML = val
-          ? `<span style="text-decoration:line-through;opacity:.5;">${drop.dataset.value}</span>&nbsp;\u2192&nbsp;<strong>${line.answers[di]}</strong>`
-          : `<strong>${line.answers[di]}</strong>`;
+        drop.innerHTML = '';
+        if (val) {
+          const s = document.createElement('span');
+          s.style.cssText = 'text-decoration:line-through;opacity:.5;';
+          s.textContent = drop.dataset.value;
+          drop.appendChild(s);
+          drop.appendChild(document.createTextNode(' → '));
+        }
+        const b = document.createElement('strong');
+        b.textContent = line.answers[di];
+        drop.appendChild(b);
       }
     });
   });
-
   document.querySelectorAll('.hint-chip').forEach(c => c.style.pointerEvents = 'none');
   const isGood = total > 0 && correct >= Math.ceil(total * 0.7);
   addXP(isGood ? (diff === 'easy' ? 12 : 20) : 3);
   updateStreak(isGood);
-  showToast(isGood ? `\u2713 ${correct}/${total} correct! +XP` : `${correct}/${total} \u2014 check the red blanks`);
+  showToast(isGood ? `✓ ${correct}/${total} correct! +XP` : `${correct}/${total} — check the red blanks`);
 }
 
 function nextGapFill() {
@@ -1655,129 +1835,271 @@ function nextGapFill() {
   renderGapFill();
 }
 
-// ════════════════════════════════
+// ════════════════════
+// ── LISTENING ──
+// ════════════════════
+const LISTEN_POOL = [
+  // Easy: pick the meaning
+  {viet:"Xin chào", eng:"Hello", options:["Hello","Goodbye","Thank you","Sorry"], answer:"Hello", diff:'easy', type:'meaning'},
+  {viet:"Cảm ơn", eng:"Thank you", options:["You're welcome","Sorry","Thank you","Excuse me"], answer:"Thank you", diff:'easy', type:'meaning'},
+  {viet:"Bao nhiêu tiền?", eng:"How much?", options:["Where is it?","How much?","When?","Who is it?"], answer:"How much?", diff:'easy', type:'meaning'},
+  {viet:"Kẹt xe quá", eng:"The traffic is terrible", options:["I'm lost","The food is good","The traffic is terrible","It's too expensive"], answer:"The traffic is terrible", diff:'easy', type:'meaning'},
+  {viet:"Ngon lắm", eng:"Really delicious", options:["Very expensive","Really delicious","Very beautiful","Too spicy"], answer:"Really delicious", diff:'easy', type:'meaning'},
+  {viet:"Dừng đây", eng:"Stop here", options:["Go faster","Turn right","Stop here","Go straight"], answer:"Stop here", diff:'easy', type:'meaning'},
+  {viet:"Không có thịt bò", eng:"No beef", options:["No chicken","No beef","No pork","No fish"], answer:"No beef", diff:'easy', type:'meaning'},
+  {viet:"Mắc vậy trời", eng:"Wow so expensive!", options:["So delicious!","Wow so expensive!","That's great!","Too spicy!"], answer:"Wow so expensive!", diff:'easy', type:'meaning'},
+
+  // Medium: type what you hear
+  {viet:"Cho tôi xem thực đơn", eng:"Can I see the menu?", diff:'medium', type:'type'},
+  {viet:"Bớt cay được không?", eng:"Can you make it less spicy?", diff:'medium', type:'type'},
+  {viet:"Thanh toán bằng thẻ được không?", eng:"Can I pay by card?", diff:'medium', type:'type'},
+  {viet:"Đi thẳng rồi quẹo phải", eng:"Go straight then turn right", diff:'medium', type:'type'},
+  {viet:"Coi bộ được đó", eng:"Looks pretty good", diff:'medium', type:'type'},
+  {viet:"Hổng có", eng:"Don't have any", diff:'medium', type:'type'},
+  {viet:"Thôi được rồi", eng:"Alright, fine", diff:'medium', type:'type'},
+  {viet:"Cho tôi mật khẩu wifi", eng:"Give me the wifi password", diff:'medium', type:'type'},
+
+  // Hard: respond appropriately
+  {viet:"Bạn muốn ăn gì?", eng:"What would you like to eat?", expected:"Cho tôi xem thực đơn / Không có thịt bò", diff:'hard', type:'respond'},
+  {viet:"Bạn đi đâu?", eng:"Where are you going?", expected:"Cho tôi đến Quận 1 / tên địa điểm", diff:'hard', type:'respond'},
+  {viet:"Bao nhiêu?", eng:"How much?", expected:"Negotiate: Mắc quá! / Rẻ hơn được không?", diff:'hard', type:'respond'},
+  {viet:"Anh tập bao lâu rồi?", eng:"How long have you been training?", expected:"Tôi tập [số] năm rồi", diff:'hard', type:'respond'},
+  {viet:"Phòng tập thế nào?", eng:"What do you think of the gym?", expected:"Coi bộ được đó! / Đẹp lắm!", diff:'hard', type:'respond'},
+  {viet:"Uống ở đây hay mang về?", eng:"Dine in or takeaway?", expected:"Uống ở đây / Mang về", diff:'hard', type:'respond'},
+];
+
+let listenPool = [];
+let listenIdx = 0;
+let listenPlaying = false;
+
+function loadListen() {
+  const filtered = LISTEN_POOL.filter(q => {
+    if (diff === 'easy') return q.diff === 'easy';
+    if (diff === 'medium') return q.diff !== 'hard';
+    return true;
+  });
+  listenPool = [...filtered].sort(() => Math.random() - 0.5);
+  listenIdx = 0;
+  renderListen();
+}
+
+function renderListen() {
+  const el = document.getElementById('listenView');
+  if (!el) return;
+  el.innerHTML = '';
+  const q = listenPool[listenIdx % listenPool.length];
+
+  const counter = document.createElement('div');
+  counter.style.cssText = 'font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--terracotta);margin-bottom:16px;';
+  counter.textContent = `${(listenIdx % listenPool.length) + 1} / ${listenPool.length} · ${q.type === 'meaning' ? 'What does it mean?' : q.type === 'type' ? 'Type what you hear' : 'How would you respond?'}`;
+  el.appendChild(counter);
+
+  // Play button
+  const playBtn = document.createElement('button');
+  playBtn.className = 'listen-play-btn';
+  playBtn.innerHTML = '▶ Play';
+  playBtn.onclick = () => speakVietnamese_listen(q.viet, playBtn);
+  el.appendChild(playBtn);
+
+  // Hint (English meaning shown after playing)
+  const hintEl = document.createElement('div');
+  hintEl.className = 'listen-hint';
+  hintEl.style.display = 'none';
+  hintEl.textContent = `"${q.eng}"`;
+  el.appendChild(hintEl);
+
+  // Show hint after 3 seconds of playing
+  playBtn.addEventListener('click', () => {
+    setTimeout(() => { hintEl.style.display = 'block'; }, 3000);
+  }, {once: true});
+
+  if (q.type === 'meaning') {
+    // Multiple choice
+    const grid = document.createElement('div');
+    grid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px;';
+    q.options.forEach(opt => {
+      const btn = document.createElement('button');
+      btn.className = 'listen-choice-btn';
+      btn.textContent = opt;
+      btn.onclick = () => checkListenChoice(opt, q.answer, grid, el);
+      grid.appendChild(btn);
+    });
+    el.appendChild(grid);
+
+  } else if (q.type === 'type') {
+    // Type input
+    const label = document.createElement('div');
+    label.style.cssText = 'font-size:13px;color:var(--muted);margin-top:20px;margin-bottom:8px;';
+    label.textContent = 'Type the Vietnamese you heard:';
+    el.appendChild(label);
+    const inp = document.createElement('input');
+    inp.className = 'chat-input';
+    inp.style.cssText = 'width:100%;margin-bottom:12px;';
+    inp.placeholder = 'Type in Vietnamese…';
+    inp.setAttribute('lang', 'vi');
+    el.appendChild(inp);
+    const checkBtn = document.createElement('button');
+    checkBtn.className = 'btn btn-primary';
+    checkBtn.textContent = 'Check';
+    checkBtn.onclick = () => checkListenType(inp.value, q.viet, el);
+    inp.onkeydown = e => { if (e.key === 'Enter') checkBtn.click(); };
+    el.appendChild(checkBtn);
+
+  } else {
+    // Respond appropriately
+    const label = document.createElement('div');
+    label.style.cssText = 'font-size:13px;color:var(--muted);margin-top:20px;margin-bottom:8px;';
+    label.textContent = 'How would you respond in Vietnamese?';
+    el.appendChild(label);
+    const inp = document.createElement('input');
+    inp.className = 'chat-input';
+    inp.style.cssText = 'width:100%;margin-bottom:12px;';
+    inp.placeholder = 'Type your response…';
+    el.appendChild(inp);
+    const checkBtn = document.createElement('button');
+    checkBtn.className = 'btn btn-primary';
+    checkBtn.textContent = 'Check';
+    checkBtn.onclick = () => checkListenRespond(inp.value, q.expected, el);
+    inp.onkeydown = e => { if (e.key === 'Enter') checkBtn.click(); };
+    el.appendChild(checkBtn);
+  }
+}
+
+function speakVietnamese_listen(text, btn) {
+  if (!window.speechSynthesis) { showToast('Audio not supported'); return; }
+  window.speechSynthesis.cancel();
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.lang = 'vi-VN';
+  utt.rate = 0.8;
+  const voices = window.speechSynthesis.getVoices();
+  const viVoice = voices.find(v => v.lang.startsWith('vi'));
+  if (viVoice) utt.voice = viVoice;
+  utt.onstart = () => { btn.innerHTML = '♪ Playing…'; btn.disabled = true; };
+  utt.onend = () => { btn.innerHTML = '▶ Play again'; btn.disabled = false; };
+  utt.onerror = () => { btn.innerHTML = '▶ Play'; btn.disabled = false; };
+  window.speechSynthesis.speak(utt);
+}
+
+function checkListenChoice(chosen, answer, grid, container) {
+  const correct = chosen === answer;
+  grid.querySelectorAll('.listen-choice-btn').forEach(btn => {
+    btn.disabled = true;
+    if (btn.textContent === answer) btn.classList.add('choice-correct');
+    else if (btn.textContent === chosen && !correct) btn.classList.add('choice-wrong');
+  });
+  addXP(correct ? 10 : 0);
+  updateStreak(correct);
+  appendListenNext(container, correct);
+}
+
+function checkListenType(val, correct, container) {
+  const norm = s => s.trim().toLowerCase().replace(/[?!.,]/g,'');
+  const isCorrect = norm(val) === norm(correct);
+  const fb = document.createElement('div');
+  fb.className = 'sb-feedback ' + (isCorrect ? 'correct' : 'incorrect');
+  fb.style.marginTop = '12px';
+  fb.textContent = isCorrect ? `✓ Correct! "${correct}"` : `✗ It was: "${correct}"`;
+  container.appendChild(fb);
+  addXP(isCorrect ? 15 : 0);
+  updateStreak(isCorrect);
+  appendListenNext(container, isCorrect);
+}
+
+function checkListenRespond(val, expected, container) {
+  const fb = document.createElement('div');
+  fb.className = 'sb-feedback correct';
+  fb.style.marginTop = '12px';
+  fb.textContent = `✓ Good try! Suggested: "${expected}"`;
+  container.appendChild(fb);
+  addXP(10);
+  updateStreak(true);
+  appendListenNext(container, true);
+}
+
+function appendListenNext(container, correct) {
+  showToast(correct ? '✓ Correct! +XP' : '✗ Keep practising');
+  const row = document.createElement('div');
+  row.className = 'btn-row';
+  row.style.marginTop = '16px';
+  const next = document.createElement('button');
+  next.className = 'btn btn-primary';
+  next.textContent = 'Next →';
+  next.onclick = () => { listenIdx++; renderListen(); };
+  row.appendChild(next);
+  container.appendChild(row);
+}
+
+// ════════════════════
 // ── TEACHER PREP ──
-// ════════════════════════════════
+// ════════════════════
 const LAST_LESSON = `Today we learned: thịt heo (pork), cá (fish), trứng (egg), rau (vegetable), cơm vs gạo (cooked vs raw rice), sữa (milk), bánh mì (bread), quả táo (apple), quả cam (orange), quả chuối (banana), cháo (porridge), cháo vịt (duck congee). Grammar: sẽ (future marker), và (and), hay (or), có lẽ (maybe). Questions: có...không, còn...không. Market: chợ, siêu thị. Measurements: ký, nửa ký. Phrase: cho em (give me).`;
 
-const EXERCISE_TEMPLATES = [
-  (w) => ({type:"Translate to Vietnamese", q:`How do you say "${w.eng}" in Vietnamese?`, hint:`Think about the category: ${w.cat}`, answer:w.viet}),
-  (w) => ({type:"Fill in the blank", q:`Complete: "Cho tôi ___ ${w.viet.split(' ').slice(-1)[0]}"`, hint:`Use the correct measure word`, answer:'một ' + w.viet}),
-  (w) => ({type:"True or False", q:`True or false: "${w.viet}" means "${w.eng}"`, hint:`Check your notes`, answer:'True'}),
-  (w) => ({type:"Use in a sentence", q:`Make a sentence using "${w.viet}" (${w.eng})`, hint:`Try: Tôi muốn / Cho tôi / Có ... không?`, answer:`e.g. Cho tôi ${w.viet} / Tôi muốn ${w.viet}`}),
-  (w) => ({type:"Pronunciation challenge", q:`Write the phonetic pronunciation of "${w.viet}"`, hint:`Break it syllable by syllable`, answer:w.pronun || 'Check your flashcard deck'}),
-];
-
-const LESSON_VOCAB = [
-  {viet:"thịt heo",eng:"pork",cat:"Food",pronun:"tit heh-oh"},
-  {viet:"cá",eng:"fish",cat:"Food",pronun:"kah"},
-  {viet:"trứng",eng:"egg",cat:"Food",pronun:"troong"},
-  {viet:"rau",eng:"vegetable",cat:"Food",pronun:"row"},
-  {viet:"cơm",eng:"cooked rice",cat:"Food",pronun:"gum"},
-  {viet:"gạo",eng:"uncooked rice",cat:"Food",pronun:"gow"},
-  {viet:"sữa",eng:"milk",cat:"Food",pronun:"soo-ah"},
-  {viet:"bánh mì",eng:"bread / baguette",cat:"Food",pronun:"bang mee"},
-  {viet:"quả chuối",eng:"banana",cat:"Food",pronun:"kwah choo-oy"},
-  {viet:"cháo vịt",eng:"duck congee",cat:"Food",pronun:"chow yit"},
-  {viet:"sẽ",eng:"will (future)",cat:"Grammar",pronun:"seh"},
-  {viet:"có lẽ",eng:"maybe",cat:"Grammar",pronun:"kaw leh"},
-  {viet:"chợ",eng:"market",cat:"Places",pronun:"chuh"},
-  {viet:"siêu thị",eng:"supermarket",cat:"Places",pronun:"syew tee"},
-  {viet:"nửa ký",eng:"half a kilogram",cat:"Measurement",pronun:"nuh-ah kee"},
-  {viet:"cho em",eng:"give me (polite)",cat:"Phrases",pronun:"cho em"},
-];
-
 function loadLastLesson() {
-  document.getElementById('tpInput').value = LAST_LESSON;
+  const el = document.getElementById('tpInput');
+  if (el) el.value = LAST_LESSON;
 }
 
 function generateExercises() {
-  const input = document.getElementById('tpInput').value.trim();
-  if (!input) { showToast('Please paste your lesson notes first'); return; }
-
-  const shuffled = [...LESSON_VOCAB].sort(() => Math.random() - 0.5);
-  const selected = shuffled.slice(0, 8);
-
-  const exercises = [];
-
-  // Fixed structural exercises always included
-  exercises.push({
-    type:"Grammar drill",
-    q:`Use "sẽ" to say: "I will eat duck congee tomorrow"`,
-    hint:`Formula: Subject + sẽ + verb + object`,
-    answer:`Ngày mai tôi sẽ ăn cháo vịt`
-  });
-  exercises.push({
-    type:"Yes/No question",
-    q:`Ask "Do you still have duck congee?" using the còn...không structure`,
-    hint:`còn + [item] + không?`,
-    answer:`Còn cháo vịt không?`
-  });
-  exercises.push({
-    type:"Market roleplay prompt",
-    q:`You're at the wet market. Ask for half a kilo of fresh fish, say it's too expensive, then negotiate`,
-    hint:`Cho tôi nửa ký cá tươi / Mắc quá! / Rẻ hơn được không?`,
-    answer:`Cho tôi nửa ký cá tươi → Mắc vậy trời! → Rẻ hơn được không?`
-  });
-  exercises.push({
-    type:"Difference check",
-    q:`What is the difference between "cơm" and "gạo"? Use both in a sentence`,
-    hint:`One is cooked, one is raw`,
-    answer:`Cơm = cooked rice (on your plate). Gạo = uncooked rice (at the market). e.g. Tôi mua gạo để nấu cơm.`
-  });
-  exercises.push({
-    type:"Connector drill",
-    q:`Combine these into one sentence using "và" or "hay": cơm / bánh mì / rau`,
-    hint:`Try asking: Bạn muốn cơm hay bánh mì? Or listing: cơm và rau`,
-    answer:`Bạn muốn cơm hay bánh mì? / Tôi muốn cơm và rau`
-  });
-
-  // Dynamic vocab exercises
-  selected.slice(0, 5).forEach((w, i) => {
-    const tmpl = EXERCISE_TEMPLATES[i % EXERCISE_TEMPLATES.length];
-    exercises.push(tmpl(w));
-  });
+  const input = document.getElementById('tpInput');
+  if (!input || !input.value.trim()) { showToast('Please paste your lesson notes first'); return; }
+  const exercises = [
+    {type:"Grammar drill", q:`Use "sẽ" to say: "I will eat duck congee tomorrow"`, hint:`Formula: Subject + sẽ + verb + object`, answer:`Ngày mai tôi sẽ ăn cháo vịt`},
+    {type:"Yes/No question", q:`Ask "Do you still have duck congee?" using còn...không`, hint:`còn + [item] + không?`, answer:`Còn cháo vịt không?`},
+    {type:"Market roleplay", q:`At the wet market: ask for half a kilo of fresh fish, react to price, negotiate`, hint:`Cho tôi nửa ký cá tươi → Mắc quá! → Rẻ hơn được không?`, answer:`Cho tôi nửa ký cá tươi → Mắc vậy trời! → Rẻ hơn được không?`},
+    {type:"Difference check", q:`What is the difference between "cơm" and "gạo"? Use both in a sentence`, hint:`One is cooked, one is raw`, answer:`Cơm = cooked (on plate). Gạo = raw (at market). Tôi mua gạo để nấu cơm.`},
+    {type:"Connector drill", q:`Combine using "và" or "hay": cơm / bánh mì / rau`, hint:`Try: Bạn muốn cơm hay bánh mì? Or: Tôi muốn cơm và rau`, answer:`Bạn muốn cơm hay bánh mì? / Tôi muốn cơm và rau`},
+    {type:"Translate to Vietnamese", q:`How do you say "Give me half a kilogram" in Vietnamese?`, hint:`Use cho tôi + measurement`, answer:`Cho tôi nửa ký`},
+    {type:"Pronunciation", q:`Write the phonetic pronunciation of "cháo vịt"`, hint:`Break syllable by syllable`, answer:`chow yit`},
+    {type:"Sentence build", q:`Build a full sentence ordering food without beef at a restaurant`, hint:`Start with Cho tôi xem thực đơn, then Không có thịt bò`, answer:`Cho tôi xem thực đơn. Tôi không ăn thịt bò.`},
+    {type:"Fill in the blank", q:`"Tôi muốn ăn ___ ___ hôm nay." (duck congee today)`, hint:`Food + time marker`, answer:`cháo vịt / hôm nay`},
+    {type:"Role-play prompt", q:`You are at the market. The vendor says "Mua gì không?" — how do you respond and ask the price?`, hint:`Cho tôi xem + item, then Bao nhiêu tiền?`, answer:`Cho tôi xem cá. Bao nhiêu tiền một ký?`},
+  ];
 
   const list = document.getElementById('exerciseList');
+  if (!list) return;
   list.innerHTML = '';
   exercises.forEach((ex, i) => {
     const el = document.createElement('div');
     el.className = 'exercise-item';
-    el.innerHTML = `
-      <div class="ex-type">${String(i+1).padStart(2,'0')} · ${ex.type}</div>
-      <div class="ex-q">${ex.q}</div>
-      ${ex.hint ? `<div class="ex-hint">💡 ${ex.hint}</div>` : ''}
-      <div class="ex-answer" id="ans-${i}">✓ ${ex.answer}</div>
-      <button class="show-answer-btn" onclick="toggleAnswer(${i})">Show answer</button>
-    `;
+    const typeEl = document.createElement('div');
+    typeEl.className = 'ex-type';
+    typeEl.textContent = String(i+1).padStart(2,'0') + ' · ' + ex.type;
+    const qEl = document.createElement('div');
+    qEl.className = 'ex-q';
+    qEl.textContent = ex.q;
+    el.appendChild(typeEl);
+    el.appendChild(qEl);
+    if (ex.hint) {
+      const hEl = document.createElement('div');
+      hEl.className = 'ex-hint';
+      hEl.textContent = '💡 ' + ex.hint;
+      el.appendChild(hEl);
+    }
+    const ansEl = document.createElement('div');
+    ansEl.className = 'ex-answer';
+    ansEl.id = `ans-${i}`;
+    ansEl.textContent = '✓ ' + ex.answer;
+    ansEl.style.display = 'none';
+    const showBtn = document.createElement('button');
+    showBtn.className = 'show-answer-btn';
+    showBtn.textContent = 'Show answer';
+    showBtn.onclick = () => {
+      const show = ansEl.style.display === 'none';
+      ansEl.style.display = show ? 'block' : 'none';
+      showBtn.textContent = show ? 'Hide answer' : 'Show answer';
+    };
+    el.appendChild(ansEl);
+    el.appendChild(showBtn);
     list.appendChild(el);
   });
-
-  showToast('10 exercises generated! ✓');
+  showToast('10 exercises generated ✓');
 }
 
-function toggleAnswer(i) {
-  const el = document.getElementById('ans-' + i);
-  const btn = el.nextElementSibling;
-  const show = el.style.display === 'none' || !el.style.display;
-  el.style.display = show ? 'block' : 'none';
-  btn.textContent = show ? 'Hide answer' : 'Show answer';
-}
-
-// ── Bottom of file — intentionally empty, init runs via onAuthStateChange ──
-
-
-// Override markCard and addXP to schedule a save after state changes
-const _markCardOrig = markCard;
-markCard = function(mastered) {
-  _markCardOrig(mastered);
-  scheduleSave();
-};
-
+// ── OVERRIDES (save progress on XP/streak change) ──
 const _addXPOrig = addXP;
 addXP = function(n) {
   _addXPOrig(n);
-  if (n > 0) scheduleSave(); // only schedule save when actually earning XP
+  if (n > 0) scheduleSave();
 };
 
 const _updateStreakOrig = updateStreak;
@@ -1786,10 +2108,7 @@ updateStreak = function(correct) {
   scheduleSave();
 };
 
-// Auto-save every 60 seconds as a safety net
 setInterval(() => { if (currentUser) saveProgressToDB(); }, 60000);
-
-// Save on page close / tab switch
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden' && currentUser) saveProgressToDB();
 });

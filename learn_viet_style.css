@@ -1244,3 +1244,83 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(circle
   .hamburger { display: none !important; }
   .app-nav-user { display: flex; }
 }
+
+
+/* ── Topic filter ── */
+.topic-btn {
+  padding: 8px 16px;
+  border-radius: 100px;
+  border: 1.5px solid rgba(26,18,8,0.12);
+  background: transparent;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.topic-btn:hover { border-color: var(--terracotta); color: var(--terracotta); }
+.topic-btn.active {
+  background: var(--terracotta);
+  border-color: var(--terracotta);
+  color: white;
+  font-weight: 600;
+}
+
+/* ── Listen mode ── */
+.listen-play-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 28px;
+  border-radius: 100px;
+  border: 2px solid var(--terracotta);
+  background: rgba(196,98,58,0.06);
+  color: var(--terracotta);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  margin: 0 auto 20px;
+  transition: all 0.2s;
+}
+.listen-play-btn:hover { background: rgba(196,98,58,0.12); transform: scale(1.03); }
+.listen-play-btn:disabled { opacity: 0.5; }
+
+.listen-hint {
+  text-align: center;
+  font-family: 'Playfair Display', serif;
+  font-size: 18px;
+  font-style: italic;
+  color: var(--muted);
+  margin-bottom: 16px;
+  animation: fadeIn 0.4s ease;
+}
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+.listen-choice-btn {
+  padding: 14px 10px;
+  border-radius: 12px;
+  border: 1.5px solid rgba(26,18,8,0.1);
+  background: var(--card-bg);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
+  cursor: pointer;
+  transition: all 0.18s;
+  text-align: center;
+}
+.listen-choice-btn:hover:not(:disabled) { border-color: var(--terracotta); background: rgba(196,98,58,0.04); }
+.listen-choice-btn.choice-correct { background: rgba(74,122,40,0.1); border-color: var(--forest-light); color: var(--forest); font-weight: 700; }
+.listen-choice-btn.choice-wrong { background: rgba(196,98,58,0.1); border-color: var(--terracotta); color: var(--terracotta); }
+.listen-choice-btn:disabled { cursor: default; }
+
+/* 5-col mode tabs shrink text on mobile */
+@media (max-width: 640px) {
+  .mode-tabs { grid-template-columns: repeat(3, 1fr) !important; }
+  .mode-tab { padding: 10px 6px; }
+  .mode-name { font-size: 10px; }
+  .mode-desc { display: none; }
+}
