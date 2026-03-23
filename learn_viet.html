@@ -1335,10 +1335,10 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(circle
 <div class="app-view" id="view-admin">
   <div class="app-wrapper">
     <div style="font-family:'Playfair Display',serif;font-size:28px;font-weight:400;margin-bottom:6px;">Admin <em style="font-style:italic;color:var(--terracotta);">Panel</em></div>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:24px;">Add and manage flashcard content. Requires your service_role key.</p>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:24px;">Add and manage flashcard content. Requires your Supabase secret key (sb_secret_...).</p>
 
     <div class="admin-key-row">
-      <input class="admin-key-input" id="adminKeyInput" type="password" placeholder="Paste service_role key to unlock..." />
+      <input class="admin-key-input" id="adminKeyInput" type="password" placeholder="Paste secret key (sb_secret_...) to unlock..." />
       <button class="btn btn-primary" onclick="unlockAdmin()" style="padding:11px 20px;border-radius:10px;">Unlock</button>
       <button class="btn btn-secondary" onclick="lockAdmin()" style="padding:11px 20px;border-radius:10px;">Lock</button>
     </div>
@@ -1346,7 +1346,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(circle
     <div id="adminLocked" class="admin-locked">
       <div class="admin-locked-icon">🔒</div>
       <div style="font-size:15px;font-weight:500;color:var(--ink);margin-bottom:6px;">Admin locked</div>
-      <div style="font-size:13px;">Enter your service_role key above to manage cards</div>
+      <div style="font-size:13px;">Enter your secret key above to manage cards</div>
     </div>
 
     <div id="adminUnlocked" style="display:none;">
@@ -1386,7 +1386,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(circle
 /* ── SUPABASE ── */
 const { createClient } = supabase;
 const sb = createClient('https://ufodnrwbbxfbbjzsowfc.supabase.co', 'sb_publishable_BS7r1bZfOIkwq_oS_twp8Q_nLYIOXn7');
-let sbAdmin = null; // service_role client, set on unlock
+let sbAdmin = null; // secret key client, set on unlock
 let currentUser = null;
 
 /* ── AUTH ── */
@@ -1512,7 +1512,7 @@ function showToast(msg, dur) {
 let adminCards = [];
 function unlockAdmin() {
   const key = document.getElementById('adminKeyInput').value.trim();
-  if (!key || !key.startsWith('eyJ')) { showToast('Invalid key format'); return; }
+  if (!key || (!key.startsWith('eyJ') && !key.startsWith('sb_secret_'))) { showToast('Invalid key format'); return; }
   sbAdmin = createClient('https://ufodnrwbbxfbbjzsowfc.supabase.co', key);
   document.getElementById('adminLocked').style.display = 'none';
   document.getElementById('adminUnlocked').style.display = 'block';
